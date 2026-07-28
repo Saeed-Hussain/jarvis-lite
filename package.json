@@ -1,0 +1,60 @@
+{
+  "name": "jarvis-lite",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Jarvis-Lite: Rule-Based Desktop Assistant (Next.js + Electron)",
+  "author": "You",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "lint": "next lint",
+    "electron:dev": "concurrently -k \"npm run dev\" \"wait-on http://localhost:3000 && cross-env NODE_ENV=development electron .\"",
+    "electron:build": "next build && next export -o out && electron-builder",
+    "dist": "npm run electron:build"
+  },
+  "dependencies": {
+    "next": "14.2.35",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "zustand": "4.5.4"
+  },
+  "devDependencies": {
+    "typescript": "5.5.4",
+    "@types/react": "18.3.3",
+    "@types/react-dom": "18.3.0",
+    "@types/node": "20.14.15",
+    "tailwindcss": "3.4.7",
+    "postcss": "8.4.40",
+    "autoprefixer": "10.4.19",
+    "electron": "31.3.0",
+    "electron-builder": "24.13.3",
+    "concurrently": "8.2.2",
+    "wait-on": "7.2.0",
+    "cross-env": "7.0.3"
+  },
+  "build": {
+    "appId": "com.jarvislite.app",
+    "productName": "Jarvis Lite",
+    "files": [
+      "out/**/*",
+      "electron/**/*",
+      "memory.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "public/icon.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "public/icon.icns"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}
