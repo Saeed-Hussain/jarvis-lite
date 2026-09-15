@@ -6,12 +6,16 @@ contextBridge.exposeInMainWorld('jarvis', {
   setMemory: (data) => ipcRenderer.invoke('memory:set', data),
 
   // Actions
-  openApp: (appKey) => ipcRenderer.invoke('action:open-app', appKey),
+  openApp: (appKey, options) => ipcRenderer.invoke('action:open-app', appKey, options),
   openUrl: (url) => ipcRenderer.invoke('action:open-url', url),
+  openUrlInProfile: (url, browser, profile) =>
+    ipcRenderer.invoke('action:open-url-profile', { url, browser, profile }),
   openCustom: (target) => ipcRenderer.invoke('action:open-custom', target),
   systemAction: (action) => ipcRenderer.invoke('action:system', action),
+  sendWhatsApp: (payload) => ipcRenderer.invoke('action:whatsapp', payload),
   createFile: (filePath, content) => ipcRenderer.invoke('action:create-file', { filePath, content }),
   openFile: (filePath) => ipcRenderer.invoke('action:open-file', filePath),
+  listProfiles: (browser) => ipcRenderer.invoke('action:list-profiles', browser),
 
   // System info
   getStats: () => ipcRenderer.invoke('system:stats'),
@@ -22,6 +26,6 @@ contextBridge.exposeInMainWorld('jarvis', {
   maximize: () => ipcRenderer.invoke('window:maximize'),
   close: () => ipcRenderer.invoke('window:close'),
 
-  // Environment flag so renderer knows it's running inside Electron
+  // Lets the renderer tell a real desktop session from a plain browser tab
   isElectron: true,
 });

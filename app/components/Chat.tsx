@@ -4,6 +4,26 @@ import { useEffect, useRef } from 'react';
 import { useJarvisStore } from '@/lib/store';
 import { UserIcon, BotIcon, CheckIcon, CloseIcon, APP_ICON_MAP, AppsIcon } from './Icons';
 import { formatTime } from '@/lib/utils';
+import type { TaskStatus } from '@/lib/types';
+
+/** Compact status marks for the plan timeline. */
+const STEP_GLYPH: Record<TaskStatus, string> = {
+  pending: '○',
+  running: '◐',
+  done: '✓',
+  failed: '✕',
+  skipped: '–',
+  blocked: '?',
+};
+
+const STEP_COLOR: Record<TaskStatus, string> = {
+  pending: 'var(--jarvis-subtext)',
+  running: 'var(--jarvis-accent)',
+  done: 'var(--jarvis-success)',
+  failed: 'var(--jarvis-danger)',
+  skipped: 'var(--jarvis-subtext)',
+  blocked: 'var(--jarvis-accent-2)',
+};
 
 export default function Chat() {
   const messages = useJarvisStore((s) => s.messages);
@@ -43,12 +63,35 @@ export default function Chat() {
                 <BotIcon width={13} height={13} style={{ color: 'var(--jarvis-accent-2)' }} />
               </div>
               <div className="glass-panel rounded-xl rounded-tl-sm px-3 py-2">
-                <p className="text-[13px]">{msg.text}</p>
+                <p className="text-[13px] whitespace-pre-line">{msg.text}</p>
                 <p className="text-[10px] mt-0.5" style={{ color: 'var(--jarvis-subtext)' }}>
                   {formatTime(new Date(msg.timestamp))}
                 </p>
               </div>
             </div>
+
+            {/* Step timeline - only worth showing once a plan has several steps */}
+            {msg.plan && msg.plan.tasks.length > 1 && (
+              <div className="ml-9 glass-panel rounded-lg px-3 py-2.5 min-w-[260px]">
+                <p className="text-[10px] uppercase tracking-wide mb-1.5" style={{ color: 'var(--jarvis-subtext)' }}>
+                  Plan · {msg.plan.tasks.length} steps
+                </p>
+                <ol className="flex flex-col gap-1">
+                  {msg.plan.tasks.map((task, i) => (
+                    <li key={task.id} className="flex items-start gap-2 text-[12px]">
+                      <span className="w-4 shrink-0 text-right" style={{ color: 'var(--jarvis-subtext)' }}>
+                        {i + 1}
+                      </span>
+                      <span className="shrink-0 mt-[1px]">{STEP_GLYPH[task.status]}</span>
+                      <span style={{ color: STEP_COLOR[task.status] }}>
+                        {task.label}
+                        {task.note ? ` — ${task.note}` : ''}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
 
             {msg.result?.appLabel && (
               <div className="ml-9 glass-panel rounded-lg px-3 py-2.5 flex items-center gap-2.5 min-w-[220px]">

@@ -1,13 +1,19 @@
 import { create } from 'zustand';
-import type { ChatMessage, JarvisMemory } from './types';
+import type { ChatMessage, JarvisMemory, Plan, Task } from './types';
 import { DEFAULT_MEMORY, loadMemory, saveMemory, appendLog } from './memory';
-import { decide, act } from './agent';
+import { planUtterance } from './planner';
+import { runPlan, PauseReason } from './executor';
 import { uid, formatTime } from './utils';
 
-interface PendingConfirmation {
-  intentRaw: string;
+/** What Jarvis is currently waiting for the user to answer. */
+interface PendingAnswer {
+  plan: Plan;
+  pause: PauseReason;
+  /** Tasks already approved this turn, carried across resumes. */
+  approved: string[];
 }
 
+/** An unrecognised command Jarvis has offered to learn. */
 interface PendingLearning {
   trigger: string;
 }
@@ -18,7 +24,8 @@ interface JarvisState {
   isListening: boolean;
   isSpeaking: boolean;
   voiceEnabled: boolean;
-  pendingConfirmation: PendingConfirmation | null;
+  autoSendWhatsApp: boolean;
+  pending: PendingAnswer | null;
   pendingLearning: PendingLearning | null;
   hydrated: boolean;
 
@@ -26,27 +33,39 @@ interface JarvisState {
   sendMessage: (text: string) => Promise<void>;
   setListening: (v: boolean) => void;
   toggleVoice: () => void;
+  toggleAutoSend: () => void;
   speak: (text: string) => void;
+  clearChat: () => void;
 }
 
-function pushMessage(state: JarvisState, msg: ChatMessage) {
-  return { messages: [...state.messages, msg] };
+const YES = /^(?:y|yes|yep|yeah|yup|sure|ok|okay|confirm|do it|go ahead|please do)$/i;
+const NO = /^(?:n|no|nope|nah|cancel|stop|don'?t|never mind|nevermind|abort)$/i;
+
+function greeting(): string {
+  const hour = new Date().getHours();
+  const part = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
+  return `Good ${part}. I'm online. Try "open chrome with profile saeed and search whatsapp web".`;
+}
+
+function jarvisMessage(text: string, extra: Partial<ChatMessage> = {}): ChatMessage {
+  return { id: uid(), role: 'jarvis', text, timestamp: Date.now(), ...extra };
+}
+
+/** Collapse a finished plan into one readable reply. */
+function summarize(transcript: string[]): string {
+  if (transcript.length === 0) return 'Nothing to do.';
+  if (transcript.length === 1) return transcript[0];
+  return transcript.map((line, i) => `${i + 1}. ${line}`).join('\n');
 }
 
 export const useJarvisStore = create<JarvisState>((set, get) => ({
-  messages: [
-    {
-      id: uid(),
-      role: 'jarvis',
-      text: 'Good evening! I\'m online and ready to help. Try "open chrome" or "what time is it".',
-      timestamp: Date.now(),
-    },
-  ],
+  messages: [jarvisMessage(greeting())],
   memory: DEFAULT_MEMORY,
   isListening: false,
   isSpeaking: false,
   voiceEnabled: true,
-  pendingConfirmation: null,
+  autoSendWhatsApp: false,
+  pending: null,
   pendingLearning: null,
   hydrated: false,
 
@@ -55,18 +74,19 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
     set({ memory, hydrated: true });
   },
 
-  setListening: (v: boolean) => set({ isListening: v }),
-
+  setListening: (v) => set({ isListening: v }),
   toggleVoice: () => set((s) => ({ voiceEnabled: !s.voiceEnabled })),
+  toggleAutoSend: () => set((s) => ({ autoSendWhatsApp: !s.autoSendWhatsApp })),
+  clearChat: () => set({ messages: [jarvisMessage(greeting())], pending: null, pendingLearning: null }),
 
-  speak: (text: string) => {
+  speak: (text) => {
     if (!get().voiceEnabled) return;
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
     try {
       window.speechSynthesis.cancel();
-      const utter = new SpeechSynthesisUtterance(text);
+      // Numbered multi-step summaries read badly aloud; speak the plain lines.
+      const utter = new SpeechSynthesisUtterance(text.replace(/^\d+\.\s*/gm, ''));
       utter.rate = 1.02;
-      utter.pitch = 1;
       set({ isSpeaking: true });
       utter.onend = () => set({ isSpeaking: false });
       utter.onerror = () => set({ isSpeaking: false });
@@ -79,120 +99,153 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
   sendMessage: async (rawText: string) => {
     const text = rawText.trim();
     if (!text) return;
-    const { memory, pendingConfirmation, pendingLearning } = get();
 
-    const userMsg: ChatMessage = { id: uid(), role: 'user', text, timestamp: Date.now() };
-    set((s) => pushMessage(s, userMsg));
+    const { memory, pending, pendingLearning, autoSendWhatsApp } = get();
+    set((s) => ({ messages: [...s.messages, { id: uid(), role: 'user', text, timestamp: Date.now() }] }));
 
-    // ----- Handle an active learning prompt: user is teaching a new command -----
+    const reply = (message: ChatMessage, patch: Partial<JarvisState> = {}) => {
+      set((s) => ({ ...patch, messages: [...s.messages, message] }));
+      get().speak(message.text);
+    };
+
+    // ----- teaching a previously unknown command -----
     if (pendingLearning) {
-      const updatedCustom = { ...memory.custom_commands, [pendingLearning.trigger]: text };
-      const updatedMemory: JarvisMemory = { ...memory, custom_commands: updatedCustom };
-      await saveMemory(updatedMemory);
-      const reply: ChatMessage = {
-        id: uid(),
-        role: 'jarvis',
-        text: `Got it — I'll remember that "${pendingLearning.trigger}" means "${text}".`,
-        timestamp: Date.now(),
-        result: { success: true, message: 'Command learned' },
+      const updated: JarvisMemory = {
+        ...memory,
+        custom_commands: { ...memory.custom_commands, [pendingLearning.trigger]: text },
       };
-      set((s) => ({ ...pushMessage(s, reply), memory: updatedMemory, pendingLearning: null }));
-      get().speak(reply.text);
+      await saveMemory(updated);
+      reply(
+        jarvisMessage(`Got it — "${pendingLearning.trigger}" now means "${text}".`, {
+          result: { success: true, message: 'Command learned' },
+        }),
+        { memory: updated, pendingLearning: null },
+      );
       return;
     }
 
-    // ----- Handle an active confirmation prompt (e.g. shutdown, restart) -----
-    if (pendingConfirmation) {
-      const lower = text.toLowerCase();
-      const confirmed = /^(yes|yep|yeah|confirm|sure|do it)$/.test(lower);
-      const denied = /^(no|nope|cancel|don't|stop)$/.test(lower);
+    // ----- answering a paused plan -----
+    if (pending) {
+      const { plan, pause, approved } = pending;
+      const tasks = plan.tasks.map((t) => ({ ...t }));
+      const target = tasks.find((t) => t.id === pause.task.id);
 
-      if (confirmed) {
-        const intent = decide(pendingConfirmation.intentRaw, memory);
-        const { result, response, updatedMemory, log } = await act({ ...intent, requiresConfirmation: false }, memory);
-        const finalMemory = appendLog(updatedMemory, log);
-        await saveMemory(finalMemory);
-        const reply: ChatMessage = { id: uid(), role: 'jarvis', text: response, timestamp: Date.now(), result };
-        set((s) => ({ ...pushMessage(s, reply), memory: finalMemory, pendingConfirmation: null }));
-        get().speak(response);
+      if (!target) {
+        set({ pending: null });
         return;
       }
-      if (denied) {
-        const reply: ChatMessage = {
-          id: uid(),
-          role: 'jarvis',
-          text: 'Okay, action cancelled.',
-          timestamp: Date.now(),
-          result: { success: true, message: 'Cancelled' },
-        };
-        set((s) => ({ ...pushMessage(s, reply), pendingConfirmation: null }));
-        get().speak(reply.text);
+
+      if (pause.type === 'confirm') {
+        if (NO.test(text)) {
+          target.status = 'skipped';
+          target.note = 'you cancelled it';
+          tasks.forEach((t) => {
+            if (t.status === 'pending') {
+              t.status = 'skipped';
+              t.note = 'cancelled';
+            }
+          });
+          reply(jarvisMessage('Cancelled — I left everything as it was.', { plan: { ...plan, tasks } }), {
+            pending: null,
+          });
+          return;
+        }
+        if (!YES.test(text)) {
+          reply(jarvisMessage('Just to be safe — reply "yes" to go ahead, or "no" to cancel.'));
+          return;
+        }
+        target.status = 'pending';
+        await resume({ ...plan, tasks }, [...approved, target.id]);
         return;
       }
-      // Neither yes nor no — re-prompt
-      const reply: ChatMessage = {
-        id: uid(),
-        role: 'jarvis',
-        text: 'Please confirm with "yes" or "no".',
-        timestamp: Date.now(),
-      };
-      set((s) => pushMessage(s, reply));
+
+      // pause.type === 'missing'
+      if (NO.test(text)) {
+        target.status = 'skipped';
+        target.note = 'you cancelled it';
+        reply(jarvisMessage("Okay, I've dropped that step.", { plan: { ...plan, tasks } }), { pending: null });
+        return;
+      }
+
+      if (pause.slot === 'phone') {
+        const digits = text.replace(/[^\d+]/g, '');
+        if (digits.replace(/\D/g, '').length < 7) {
+          reply(jarvisMessage("That doesn't look like a phone number. Include the country code, e.g. +923001234567."));
+          return;
+        }
+        target.phone = digits;
+        target.missing = undefined;
+        target.status = 'pending';
+      } else if (pause.slot === 'recipient') {
+        const digits = text.replace(/[^\d+]/g, '');
+        if (digits.replace(/\D/g, '').length >= 7) {
+          target.phone = digits;
+          target.recipient = digits;
+        } else {
+          target.recipient = text;
+        }
+        target.missing = target.missing?.filter((m) => m !== 'recipient');
+        if (!target.missing?.length) target.missing = undefined;
+        target.status = 'pending';
+      } else {
+        target.message = text;
+        target.missing = target.missing?.filter((m) => m !== 'message');
+        if (!target.missing?.length) target.missing = undefined;
+        target.status = 'pending';
+      }
+
+      await resume({ ...plan, tasks }, approved);
       return;
     }
 
-    // ----- Normal observe -> decide -> act loop -----
-    const intent = decide(text, memory);
+    // ----- a fresh utterance -----
+    const plan = planUtterance(text, memory);
+    await resume(plan, []);
 
-    // Unknown command -> enter learning flow
-    if (intent.type === 'unknown') {
-      const { response, log } = await act(intent, memory);
-      const finalMemory = appendLog(memory, log);
-      await saveMemory(finalMemory);
-      const reply: ChatMessage = {
-        id: uid(),
-        role: 'jarvis',
-        text: response,
-        timestamp: Date.now(),
-        isLearningPrompt: response.startsWith("I don't know"),
-      };
+    // -----------------------------------------------------------------------
+
+    async function resume(activePlan: Plan, approvedIds: string[]) {
+      const current = get().memory;
+      const outcome = await runPlan(activePlan, current, {
+        approved: new Set(approvedIds),
+        autoSendWhatsApp,
+      });
+
+      let nextMemory = outcome.memory;
+      for (const entry of outcome.logs) nextMemory = appendLog(nextMemory, entry);
+      await saveMemory(nextMemory);
+
+      const pause = outcome.pause;
+      if (pause) {
+        const prefix = outcome.transcript.length ? `${summarize(outcome.transcript)}\n\n` : '';
+        set((s) => ({
+          memory: nextMemory,
+          pending: { plan: outcome.plan, pause, approved: approvedIds },
+          messages: [
+            ...s.messages,
+            jarvisMessage(`${prefix}${pause.question}`, {
+              plan: outcome.plan,
+              needsConfirmation: pause.type === 'confirm',
+            }),
+          ],
+        }));
+        get().speak(pause.question);
+        return;
+      }
+
+      // An entirely unresolved single step becomes a teaching opportunity.
+      const onlyTask: Task | undefined = outcome.plan.tasks.length === 1 ? outcome.plan.tasks[0] : undefined;
+      const teachable = onlyTask?.kind === 'unknown';
+
+      const summary = summarize(outcome.transcript);
       set((s) => ({
-        ...pushMessage(s, reply),
-        memory: finalMemory,
-        pendingLearning: response.startsWith("I don't know") ? { trigger: text } : null,
+        memory: nextMemory,
+        pending: null,
+        pendingLearning: teachable ? { trigger: text } : null,
+        messages: [...s.messages, jarvisMessage(summary, { plan: outcome.plan })],
       }));
-      get().speak(response);
-      return;
+      get().speak(summary);
     }
-
-    // Dangerous action -> ask for confirmation first
-    if (intent.requiresConfirmation) {
-      const reply: ChatMessage = {
-        id: uid(),
-        role: 'jarvis',
-        text: `Are you sure you want to ${intent.target}? This cannot be undone.`,
-        timestamp: Date.now(),
-        needsConfirmation: true,
-      };
-      set((s) => ({ ...pushMessage(s, reply), pendingConfirmation: { intentRaw: text } }));
-      get().speak(reply.text);
-      return;
-    }
-
-    // Execute normally
-    const { result, response, updatedMemory, log } = await act(intent, memory);
-    const finalMemory = appendLog(updatedMemory, log);
-    await saveMemory(finalMemory);
-    const reply: ChatMessage = { id: uid(), role: 'jarvis', text: response, timestamp: Date.now(), result };
-
-    // A generic app launch that failed -> ask the user to teach the exact command/path
-    if (intent.type === 'open_generic_app' && !result.success) {
-      set((s) => ({ ...pushMessage(s, reply), memory: finalMemory, pendingLearning: { trigger: text } }));
-      get().speak(response);
-      return;
-    }
-
-    set((s) => ({ ...pushMessage(s, reply), memory: finalMemory }));
-    get().speak(response);
   },
 }));
 

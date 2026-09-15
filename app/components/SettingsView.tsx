@@ -9,6 +9,8 @@ export default function SettingsView() {
   const { theme, toggleTheme } = useTheme();
   const voiceEnabled = useJarvisStore((s) => s.voiceEnabled);
   const toggleVoice = useJarvisStore((s) => s.toggleVoice);
+  const autoSendWhatsApp = useJarvisStore((s) => s.autoSendWhatsApp);
+  const toggleAutoSend = useJarvisStore((s) => s.toggleAutoSend);
 
   const resetMemory = async () => {
     await saveMemory(DEFAULT_MEMORY);
@@ -51,6 +53,28 @@ export default function SettingsView() {
           <span
             className="absolute top-0.5 w-6 h-6 rounded-full bg-white transition-all"
             style={{ left: voiceEnabled ? '22px' : '2px' }}
+          />
+        </button>
+      </div>
+
+      <div className="glass-panel rounded-lg p-3.5 flex items-center justify-between">
+        <div className="pr-4">
+          <p className="font-medium text-[13px]">Auto-send WhatsApp messages</p>
+          <p className="text-[11px] mt-0.5" style={{ color: 'var(--jarvis-subtext)' }}>
+            Off: Jarvis opens the chat with your message typed in, and you press Enter.
+            On: it presses Enter for you a few seconds after the chat opens — if you click
+            another window during that pause, the keystroke goes there instead.
+          </p>
+        </div>
+        <button
+          onClick={toggleAutoSend}
+          aria-label="Toggle WhatsApp auto-send"
+          className="w-12 h-7 rounded-full relative transition-colors shrink-0"
+          style={{ backgroundColor: autoSendWhatsApp ? 'var(--jarvis-danger)' : 'var(--jarvis-border)' }}
+        >
+          <span
+            className="absolute top-0.5 w-6 h-6 rounded-full bg-white transition-all"
+            style={{ left: autoSendWhatsApp ? '22px' : '2px' }}
           />
         </button>
       </div>

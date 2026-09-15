@@ -82,7 +82,19 @@ export const KNOWN_SITES: SiteDef[] = [
   { key: 'stackoverflow', label: 'Stack Overflow', url: 'https://stackoverflow.com', icon: 'google', aliases: ['stack overflow', 'stackoverflow'] },
   { key: 'twitch', label: 'Twitch', url: 'https://twitch.tv', icon: 'google', aliases: ['twitch'] },
   { key: 'spotifyweb', label: 'Spotify Web', url: 'https://open.spotify.com', icon: 'google', aliases: ['spotify web', 'open spotify web'] },
+  { key: 'whatsappweb', label: 'WhatsApp Web', url: 'https://web.whatsapp.com', icon: 'apps', aliases: ['whatsapp web', 'web whatsapp', 'whatsapp online'] },
+  { key: 'webmail', label: 'Outlook Web', url: 'https://outlook.live.com', icon: 'mail', aliases: ['outlook web', 'hotmail'] },
 ];
+
+/**
+ * Browser keys that accept a named profile, mapped to the CLI flag used to
+ * select one. Anything not listed here ignores a profile slot.
+ */
+export const PROFILE_CAPABLE_BROWSERS: Record<string, string> = {
+  chrome: '--profile-directory',
+  edge: '--profile-directory',
+  firefox: '-P',
+};
 
 export const DANGEROUS_ACTIONS = ['shutdown', 'restart', 'lock', 'delete file', 'delete'];
 

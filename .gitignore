@@ -1,0 +1,23 @@
+# dependencies
+node_modules/
+
+# next.js build output
+.next/
+out/
+
+# electron-builder output
+dist/
+
+# typescript incremental cache
+*.tsbuildinfo
+
+# runtime memory (the real one lives in Electron userData; memory.json at the
+# repo root is only a seed file and stays tracked)
+memory.json.tmp
+
+# env
+.env*.local
+
+# os
+.DS_Store
+Thumbs.db

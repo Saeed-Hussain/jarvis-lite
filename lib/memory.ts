@@ -6,31 +6,47 @@ export const DEFAULT_MEMORY: JarvisMemory = {
   last_command: '',
   last_app: '',
   custom_commands: {},
+  contacts: {},
   logs: [],
 };
 
 export async function loadMemory(): Promise<JarvisMemory> {
-  if (typeof window !== 'undefined' && window.jarvis?.isElectron) {
-    return window.jarvis.getMemory();
-  }
-  if (typeof window !== 'undefined') {
+  if (typeof window === 'undefined') return { ...DEFAULT_MEMORY };
+
+  if (window.jarvis?.isElectron) {
     try {
-      const raw = window.localStorage.getItem(LOCAL_KEY);
-      if (raw) return { ...DEFAULT_MEMORY, ...JSON.parse(raw) };
+      const stored = await window.jarvis.getMemory();
+      return { ...DEFAULT_MEMORY, ...stored };
     } catch {
-      /* ignore malformed local storage */
+      return { ...DEFAULT_MEMORY };
     }
+  }
+
+  try {
+    const raw = window.localStorage.getItem(LOCAL_KEY);
+    if (raw) return { ...DEFAULT_MEMORY, ...JSON.parse(raw) };
+  } catch {
+    /* malformed or unavailable storage - start clean */
   }
   return { ...DEFAULT_MEMORY };
 }
 
 export async function saveMemory(memory: JarvisMemory): Promise<void> {
-  if (typeof window !== 'undefined' && window.jarvis?.isElectron) {
-    await window.jarvis.setMemory(memory);
+  if (typeof window === 'undefined') return;
+
+  if (window.jarvis?.isElectron) {
+    try {
+      await window.jarvis.setMemory(memory);
+    } catch {
+      /* the main process logs the real failure */
+    }
     return;
   }
-  if (typeof window !== 'undefined') {
+
+  try {
     window.localStorage.setItem(LOCAL_KEY, JSON.stringify(memory));
+  } catch {
+    /* quota exceeded or storage disabled - non-fatal */
   }
 }
 
@@ -41,8 +57,11 @@ export function learnCommand(memory: JarvisMemory, trigger: string, mappedAction
   };
 }
 
-/** Keep only the most recent N log entries to stay lightweight */
+export function rememberContact(memory: JarvisMemory, name: string, phone: string): JarvisMemory {
+  return { ...memory, contacts: { ...memory.contacts, [name]: phone } };
+}
+
+/** Keep only the most recent N log entries so memory.json stays small. */
 export function appendLog(memory: JarvisMemory, log: JarvisMemory['logs'][number], max = 100): JarvisMemory {
-  const logs = [log, ...memory.logs].slice(0, max);
-  return { ...memory, logs };
+  return { ...memory, logs: [log, ...memory.logs].slice(0, max) };
 }
