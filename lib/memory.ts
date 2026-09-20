@@ -7,6 +7,7 @@ export const DEFAULT_MEMORY: JarvisMemory = {
   last_app: '',
   custom_commands: {},
   contacts: {},
+  last_path: '',
   logs: [],
 };
 

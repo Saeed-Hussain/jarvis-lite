@@ -3,7 +3,28 @@ import type { ChatMessage, JarvisMemory, Plan, Task } from './types';
 import { DEFAULT_MEMORY, loadMemory, saveMemory, appendLog } from './memory';
 import { planUtterance } from './planner';
 import { runPlan, PauseReason } from './executor';
+import { brain, BrainState } from './brain/client';
 import { uid, formatTime } from './utils';
+
+/** Remembered separately from memory.json: it is a device choice, not a fact. */
+const BRAIN_KEY = 'jarvis-lite-brain-enabled';
+
+function readBrainPreference(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(BRAIN_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function writeBrainPreference(enabled: boolean): void {
+  try {
+    window.localStorage.setItem(BRAIN_KEY, String(enabled));
+  } catch {
+    /* storage disabled - the toggle just won't survive a restart */
+  }
+}
 
 /** What Jarvis is currently waiting for the user to answer. */
 interface PendingAnswer {
@@ -29,11 +50,19 @@ interface JarvisState {
   pendingLearning: PendingLearning | null;
   hydrated: boolean;
 
+  /** The local model: off by default, because turning it on downloads it. */
+  brainEnabled: boolean;
+  brain: BrainState;
+  /** True while the model is working out what a sentence meant. */
+  thinking: boolean;
+
   hydrate: () => Promise<void>;
   sendMessage: (text: string) => Promise<void>;
   setListening: (v: boolean) => void;
   toggleVoice: () => void;
   toggleAutoSend: () => void;
+  enableBrain: () => void;
+  disableBrain: () => void;
   speak: (text: string) => void;
   clearChat: () => void;
 }
@@ -69,14 +98,35 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
   pendingLearning: null,
   hydrated: false,
 
+  brainEnabled: false,
+  brain: { status: 'idle', percent: 0, device: '', message: '', lastMs: 0 },
+  thinking: false,
+
   hydrate: async () => {
     const memory = await loadMemory();
-    set({ memory, hydrated: true });
+    const brainEnabled = readBrainPreference();
+    set({ memory, hydrated: true, brainEnabled });
+
+    brain.subscribe((state) => set({ brain: state }));
+    // Only start downloading when the user has already said yes once.
+    if (brainEnabled) brain.start();
   },
 
   setListening: (v) => set({ isListening: v }),
   toggleVoice: () => set((s) => ({ voiceEnabled: !s.voiceEnabled })),
   toggleAutoSend: () => set((s) => ({ autoSendWhatsApp: !s.autoSendWhatsApp })),
+
+  enableBrain: () => {
+    writeBrainPreference(true);
+    set({ brainEnabled: true });
+    brain.start();
+  },
+  disableBrain: () => {
+    // The worker keeps running: it is already in memory, and tearing it down
+    // only means paying the load cost again if this is toggled back.
+    writeBrainPreference(false);
+    set({ brainEnabled: false });
+  },
   clearChat: () => set({ messages: [jarvisMessage(greeting())], pending: null, pendingLearning: null }),
 
   speak: (text) => {
@@ -159,6 +209,32 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
         return;
       }
 
+      // ----- a Pilot run paused on a guard verdict -----
+      // Half the workflow has already run, so "no" cancels the rest rather
+      // than undoing what happened; the undo journal is the tool for that.
+      if (pause.type === 'pilot') {
+        if (NO.test(text)) {
+          target.status = 'skipped';
+          target.note = 'you declined that step';
+          reply(
+            jarvisMessage(
+              'Stopped there. Everything before that step already ran — the Pilot panel can undo any files it touched.',
+              { plan: { ...plan, tasks } },
+            ),
+            { pending: null },
+          );
+          return;
+        }
+        if (!YES.test(text)) {
+          reply(jarvisMessage('Reply "yes" to let that step run, or "no" to stop the workflow there.'));
+          return;
+        }
+        target.pilotApprove = true;
+        target.status = 'pending';
+        await resume({ ...plan, tasks }, approved);
+        return;
+      }
+
       // pause.type === 'missing'
       if (NO.test(text)) {
         target.status = 'skipped';
@@ -174,6 +250,11 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
           return;
         }
         target.phone = digits;
+        target.missing = undefined;
+        target.status = 'pending';
+      } else if (pause.slot === 'workflow') {
+        target.workflow = text;
+        target.label = `Replay "${text}" on screen`;
         target.missing = undefined;
         target.status = 'pending';
       } else if (pause.slot === 'recipient') {
@@ -199,7 +280,25 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
     }
 
     // ----- a fresh utterance -----
-    const plan = planUtterance(text, memory);
+    // Rules first: they are instant, free and deterministic, and they handle
+    // most of what anyone actually says. The model is only consulted for what
+    // they could not resolve.
+    let plan = planUtterance(text, memory);
+
+    if (plan.tasks.some((t) => t.kind === 'unknown') && get().brainEnabled) {
+      set({ thinking: true });
+      try {
+        const workflows = (await window.jarvis?.pilot?.workflows())?.map((w) => w.name);
+        const proposed = await brain.parse(text, { workflows, cwd: memory.last_path || undefined });
+        // The whole plan is replaced rather than patched: the rule-based
+        // splitter may have cut the sentence in the wrong place, which is
+        // often why a step came out unknown at all.
+        if (proposed?.length) plan = { ...plan, tasks: proposed };
+      } finally {
+        set({ thinking: false });
+      }
+    }
+
     await resume(plan, []);
 
     // -----------------------------------------------------------------------
@@ -238,11 +337,15 @@ export const useJarvisStore = create<JarvisState>((set, get) => ({
       const teachable = onlyTask?.kind === 'unknown';
 
       const summary = summarize(outcome.transcript);
+      // Nothing understood and no model to fall back on: offering to turn one
+      // on is a better answer than asking the user to teach every phrasing.
+      const offerBrain = teachable && !get().brainEnabled;
+
       set((s) => ({
         memory: nextMemory,
         pending: null,
         pendingLearning: teachable ? { trigger: text } : null,
-        messages: [...s.messages, jarvisMessage(summary, { plan: outcome.plan })],
+        messages: [...s.messages, jarvisMessage(summary, { plan: outcome.plan, offerBrain })],
       }));
       get().speak(summary);
     }

@@ -1,53 +1,35 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useJarvisStore } from '@/lib/store';
+import { useVoiceStore } from '@/lib/voice/store';
 import { MicIcon, SendIcon } from './Icons';
 
-// Minimal shape for the non-standard Web Speech API
-interface SpeechRecognitionLike {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  onresult: ((event: any) => void) | null;
-  onerror: ((event: any) => void) | null;
-  onend: (() => void) | null;
-  start: () => void;
-  stop: () => void;
-}
+/** What the mic button looks like in each listener state. */
+const TONE: Record<string, string> = {
+  off: 'var(--jarvis-accent)',
+  loading: 'var(--jarvis-subtext)',
+  armed: 'var(--jarvis-accent-2)',
+  listening: 'var(--jarvis-danger)',
+  thinking: 'var(--jarvis-subtext)',
+  error: 'var(--jarvis-danger)',
+};
 
 export default function InputBar() {
   const [value, setValue] = useState('');
-  const [micError, setMicError] = useState<string | null>(null);
-  const isListening = useJarvisStore((s) => s.isListening);
-  const setListening = useJarvisStore((s) => s.setListening);
   const sendMessage = useJarvisStore((s) => s.sendMessage);
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const thinking = useJarvisStore((s) => s.thinking);
 
+  const init = useVoiceStore((s) => s.init);
+  const listenOnce = useVoiceStore((s) => s.listenOnce);
+  const disable = useVoiceStore((s) => s.disable);
+  const wakeEnabled = useVoiceStore((s) => s.wakeEnabled);
+  const voice = useVoiceStore((s) => s.state);
+
+  // Creates the listener and, if the wake word was left on, starts it.
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const SpeechRecognitionCtor: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognitionCtor) return;
-
-    const recognition: SpeechRecognitionLike = new SpeechRecognitionCtor();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.lang = 'en-US';
-
-    recognition.onresult = (event: any) => {
-      const transcript = event.results?.[0]?.[0]?.transcript ?? '';
-      if (transcript) {
-        sendMessage(transcript);
-      }
-    };
-    recognition.onerror = (event: any) => {
-      setMicError(event?.error === 'not-allowed' ? 'Microphone permission denied.' : 'Voice recognition error.');
-      setListening(false);
-    };
-    recognition.onend = () => setListening(false);
-
-    recognitionRef.current = recognition;
-  }, [sendMessage, setListening]);
+    init();
+  }, [init]);
 
   const handleSend = () => {
     if (!value.trim()) return;
@@ -56,31 +38,53 @@ export default function InputBar() {
   };
 
   const handleMic = () => {
-    setMicError(null);
-    if (!recognitionRef.current) {
-      setMicError('Voice recognition is not supported in this browser.');
+    if (voice.status === 'listening') {
+      // Cancel: drop back to the wake word, or off entirely.
+      if (wakeEnabled) useVoiceStore.getState().listener?.listenNow();
+      else disable();
       return;
     }
-    if (isListening) {
-      recognitionRef.current.stop();
-      setListening(false);
-      return;
-    }
-    try {
-      recognitionRef.current.start();
-      setListening(true);
-    } catch {
-      setMicError('Could not start microphone.');
-    }
+    void listenOnce();
   };
+
+  const note =
+    voice.status === 'error'
+      ? voice.message
+      : voice.status === 'loading'
+        ? voice.message
+        : thinking
+          ? 'Working out what that meant…'
+          : voice.status === 'listening'
+            ? 'Listening…'
+            : voice.status === 'thinking'
+              ? 'Transcribing…'
+              : voice.status === 'armed'
+                ? `Listening for “Jarvis”${voice.heard ? ` · heard: “${voice.heard}”` : ''}`
+                : '';
 
   return (
     <div className="px-4 py-3 glass-panel border-t">
-      {micError && (
-        <p className="text-xs mb-2 px-1" style={{ color: 'var(--jarvis-danger)' }}>
-          {micError}
-        </p>
+      {note && (
+        <div className="flex items-center gap-2 mb-2 px-1">
+          {/* A live level meter, so "is it hearing me?" has a visible answer. */}
+          {(voice.status === 'armed' || voice.status === 'listening') && (
+            <span className="w-12 h-1 rounded-full overflow-hidden shrink-0" style={{ backgroundColor: 'var(--jarvis-border)' }}>
+              <span
+                className="block h-full rounded-full transition-all duration-75"
+                style={{ width: `${Math.round(voice.level * 100)}%`, backgroundColor: TONE[voice.status] }}
+              />
+            </span>
+          )}
+          <p
+            className="text-xs truncate"
+            style={{ color: voice.status === 'error' ? 'var(--jarvis-danger)' : 'var(--jarvis-subtext)' }}
+          >
+            {note}
+            {voice.status === 'loading' && voice.percent > 0 ? ` (${voice.percent}%)` : ''}
+          </p>
+        </div>
       )}
+
       <div className="flex items-center gap-2">
         <input
           value={value}
@@ -88,14 +92,18 @@ export default function InputBar() {
           onKeyDown={(e) => e.key === 'Enter' && handleSend()}
           placeholder="Type a command..."
           className="flex-1 rounded-lg px-3 py-2.5 text-[13px] outline-none glass-panel focus:ring-2"
-          style={{ ['--tw-ring-color' as any]: 'var(--jarvis-accent)' }}
+          style={{ ['--tw-ring-color' as string]: 'var(--jarvis-accent)' } as React.CSSProperties}
         />
         <button
           onClick={handleMic}
           aria-label="Toggle microphone"
-          className="w-10 h-10 rounded-lg flex items-center justify-center text-white shrink-0"
-          style={{ backgroundColor: isListening ? 'var(--jarvis-danger)' : 'var(--jarvis-accent)' }}
+          title={wakeEnabled ? 'Listening for “Jarvis” — click to speak now' : 'Click to speak'}
+          className="w-10 h-10 rounded-lg flex items-center justify-center text-white shrink-0 relative"
+          style={{ backgroundColor: TONE[voice.status] ?? 'var(--jarvis-accent)' }}
         >
+          {voice.status === 'listening' && (
+            <span className="absolute inset-0 rounded-lg animate-pulseRing" style={{ border: '2px solid var(--jarvis-danger)' }} />
+          )}
           <MicIcon width={16} height={16} />
         </button>
         <button

@@ -1,8 +1,9 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, Tray, Menu, nativeImage, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { spawn, execFile } = require('child_process');
+const { registerPilotHandlers, shutdownPilot } = require('./pilot');
 
 const isDev = process.env.NODE_ENV === 'development';
 const MEMORY_PATH = path.join(app.getPath('userData'), 'memory.json');
@@ -15,6 +16,7 @@ const DEFAULT_MEMORY = {
   last_app: '',
   custom_commands: {},
   contacts: {},
+  last_path: '',
   logs: [],
 };
 
@@ -505,6 +507,187 @@ async function openCustom(target) {
     : { success: false, message: `Failed to run "${trimmed}": ${result.message}` };
 }
 
+// ---------------------------------------------------------------------------
+// Filesystem navigation
+// ---------------------------------------------------------------------------
+// "open d drive" then "go to the projects folder" has to work, which means
+// resolving a spoken folder name against somewhere sensible rather than
+// demanding a full path. Resolution is deliberately explicit about ambiguity:
+// three folders that all match get handed back as a question, not a guess.
+
+/** "d drive" / "drive d" / "d:" / "the d drive" -> "D:\" */
+function driveFromPhrase(text) {
+  const match = String(text || '')
+    .trim()
+    .match(/^(?:the\s+)?(?:([a-z])\s*(?:drive|:)\\?|drive\s+([a-z]))$/i);
+  if (!match) return null;
+  const letter = (match[1] || match[2]).toUpperCase();
+  return `${letter}:\\`;
+}
+
+/** Folders Windows users name out loud but never by path. */
+function wellKnownPath(name) {
+  const key = String(name || '').trim().toLowerCase().replace(/^(?:my|the)\s+/, '');
+  const table = {
+    desktop: 'desktop',
+    documents: 'documents',
+    docs: 'documents',
+    downloads: 'downloads',
+    download: 'downloads',
+    pictures: 'pictures',
+    photos: 'pictures',
+    music: 'music',
+    videos: 'videos',
+    home: 'home',
+  };
+  if (!table[key]) return null;
+  try {
+    return app.getPath(table[key]);
+  } catch {
+    return null;
+  }
+}
+
+/** Every drive root that currently exists, cheapest possible probe. */
+function driveRoots() {
+  if (process.platform !== 'win32') return ['/'];
+  const roots = [];
+  for (let code = 67; code <= 90; code++) {
+    const root = `${String.fromCharCode(code)}:\\`;
+    try {
+      if (fs.existsSync(root)) roots.push(root);
+    } catch {
+      /* not ready (empty card reader) - skip it */
+    }
+  }
+  return roots;
+}
+
+/** Directory entries of `dir`, or [] if it cannot be read. */
+function subdirectories(dir) {
+  try {
+    return fs
+      .readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && !entry.name.startsWith('$'))
+      .map((entry) => entry.name);
+  } catch {
+    return [];
+  }
+}
+
+/** Exact, then prefix, then substring — so "project" finds "projects". */
+function matchNames(names, wanted) {
+  const needle = wanted.trim().toLowerCase();
+  const exact = names.filter((n) => n.toLowerCase() === needle);
+  if (exact.length) return exact;
+  const prefix = names.filter((n) => n.toLowerCase().startsWith(needle));
+  if (prefix.length) return prefix;
+  return names.filter((n) => n.toLowerCase().includes(needle));
+}
+
+/**
+ * Work out what a spoken location means.
+ *
+ * `base` is where the conversation currently is — the last place Jarvis
+ * opened — so "go to the projects folder" means inside it, and only falls back
+ * to searching elsewhere when that misses.
+ */
+function resolvePath(query, base) {
+  const raw = String(query || '').trim().replace(/^["']|["']$/g, '');
+  if (!raw) return { success: false, message: 'Which folder?' };
+
+  // --- already a path ------------------------------------------------------
+  if (/^[a-z]:[\\/]/i.test(raw) || /^\\\\/.test(raw) || raw.startsWith('/')) {
+    return fs.existsSync(raw)
+      ? { success: true, path: path.normalize(raw) }
+      : { success: false, message: `There's nothing at ${raw}.` };
+  }
+
+  // --- a drive -------------------------------------------------------------
+  const drive = driveFromPhrase(raw);
+  if (drive) {
+    return fs.existsSync(drive)
+      ? { success: true, path: drive }
+      : { success: false, message: `There's no ${drive.replace('\\', '')} drive on this machine.` };
+  }
+
+  // --- a well-known folder -------------------------------------------------
+  const known = wellKnownPath(raw);
+  if (known) return { success: true, path: known };
+
+  // --- a folder name, searched somewhere sensible --------------------------
+  const name = raw.replace(/\s+folder$/i, '').replace(/^(?:the|my)\s+/i, '').trim();
+
+  // "projects/src" spoken as one phrase still has to land.
+  const segments = name.split(/[\\/]+/).filter(Boolean);
+  if (segments.length > 1 && base) {
+    const joined = path.join(base, ...segments);
+    if (fs.existsSync(joined)) return { success: true, path: joined };
+  }
+
+  const searchRoots = [];
+  if (base && fs.existsSync(base)) searchRoots.push(base);
+  const home = app.getPath('home');
+  if (!searchRoots.includes(home)) searchRoots.push(home);
+  for (const root of driveRoots()) {
+    if (!searchRoots.includes(root)) searchRoots.push(root);
+  }
+
+  const hits = [];
+  for (const root of searchRoots) {
+    for (const match of matchNames(subdirectories(root), name)) {
+      hits.push(path.join(root, match));
+    }
+    // The first root that matches wins outright: a folder inside where we
+    // already are beats an identically-named one three drives away.
+    if (hits.length) break;
+  }
+
+  if (hits.length === 1) return { success: true, path: hits[0] };
+  if (hits.length > 1) {
+    return {
+      success: false,
+      candidates: hits.slice(0, 8),
+      message: `I found ${hits.length} of those: ${hits.slice(0, 8).join(', ')}. Which one?`,
+    };
+  }
+
+  return {
+    success: false,
+    message: `I couldn't find a folder called "${name}"${base ? ` in ${base}, your home folder or any drive root` : ''}.`,
+  };
+}
+
+/** Resolve, then open it in Explorer. */
+function openPath(query, base) {
+  const resolved = resolvePath(query, base);
+  if (!resolved.success) return Promise.resolve(resolved);
+
+  return shell.openPath(resolved.path).then((error) =>
+    error
+      ? { success: false, message: `Couldn't open ${resolved.path}: ${error}` }
+      : { success: true, message: `Opened ${resolved.path}`, path: resolved.path },
+  );
+}
+
+/** What's in a folder — so Jarvis can answer without opening a window. */
+function listPath(query, base) {
+  const resolved = resolvePath(query, base);
+  if (!resolved.success) return resolved;
+  try {
+    const entries = fs.readdirSync(resolved.path, { withFileTypes: true });
+    return {
+      success: true,
+      path: resolved.path,
+      folders: entries.filter((e) => e.isDirectory()).map((e) => e.name).slice(0, 200),
+      files: entries.filter((e) => e.isFile()).map((e) => e.name).slice(0, 200),
+      message: `${resolved.path} holds ${entries.filter((e) => e.isDirectory()).length} folders and ${entries.filter((e) => e.isFile()).length} files.`,
+    };
+  } catch (err) {
+    return { success: false, message: `Couldn't read ${resolved.path}: ${err.message}` };
+  }
+}
+
 function createFile(filePath, content = '') {
   try {
     fs.writeFileSync(filePath, content);
@@ -539,6 +722,9 @@ function registerIpcHandlers() {
   ipcMain.handle('action:open-custom', (_event, target) => openCustom(target));
   ipcMain.handle('action:system', (_event, action) => systemAction(action));
   ipcMain.handle('action:whatsapp', (_event, payload) => sendWhatsApp(payload || {}));
+  ipcMain.handle('action:open-path', (_event, { query, base }) => openPath(query, base));
+  ipcMain.handle('action:list-path', (_event, { query, base }) => listPath(query, base));
+  ipcMain.handle('action:resolve-path', (_event, { query, base }) => resolvePath(query, base));
   ipcMain.handle('action:create-file', (_event, { filePath, content }) => createFile(filePath, content));
   ipcMain.handle('action:open-file', (_event, filePath) => openFile(filePath));
   ipcMain.handle('action:list-profiles', (_event, browser) => listProfiles(browser || 'chrome'));
@@ -577,6 +763,83 @@ function registerIpcHandlers() {
     mainWindow?.isMaximized() ? mainWindow.unmaximize() : mainWindow?.maximize(),
   );
   ipcMain.handle('window:close', () => mainWindow?.close());
+
+  // The wake word fires while the window is hidden in the tray, so the
+  // renderer needs a way to ask for itself back.
+  ipcMain.handle('window:show', () => showWindow());
+  ipcMain.handle('window:hide', () => mainWindow?.hide());
+
+  // Pilot's own surface. It pushes events back (a stop pressed on the global
+  // shortcut has to reach a renderer that is not asking for anything), so it
+  // gets a sender rather than only answering invokes.
+  registerPilotHandlers((channel, payload) => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Tray — Jarvis has to stay resident for a wake word to mean anything
+// ---------------------------------------------------------------------------
+// Nothing can hear "jarvis" when no process is running, so closing the window
+// hides it instead of quitting. Quitting is still available, from the tray
+// menu and from a real app quit.
+
+let tray = null;
+let quitting = false;
+
+function showWindow() {
+  if (!mainWindow) {
+    createWindow();
+    return;
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+/**
+ * A tray icon drawn in code.
+ * electron-builder only supplies an icon when the developer dropped one into
+ * build/, and a tray with no image is an invisible tray - which looks exactly
+ * like the app having crashed.
+ */
+function trayIcon() {
+  const file = path.join(__dirname, '..', 'build', 'icon.png');
+  try {
+    if (fs.existsSync(file)) {
+      const image = nativeImage.createFromPath(file);
+      if (!image.isEmpty()) return image.resize({ width: 16, height: 16 });
+    }
+  } catch {
+    /* fall through to the drawn one */
+  }
+
+  // A 16x16 filled circle, as a data URL, so there is always something there.
+  const svg =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16">' +
+    '<circle cx="8" cy="8" r="7" fill="none" stroke="#3b82f6" stroke-width="2"/>' +
+    '<circle cx="8" cy="8" r="3" fill="#3b82f6"/></svg>';
+  return nativeImage.createFromDataURL(`data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`);
+}
+
+function createTray() {
+  if (tray) return;
+  tray = new Tray(trayIcon());
+  tray.setToolTip('Jarvis Lite — say “Jarvis”');
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: 'Open Jarvis', click: () => showWindow() },
+      { type: 'separator' },
+      {
+        label: 'Quit',
+        click: () => {
+          quitting = true;
+          app.quit();
+        },
+      },
+    ]),
+  );
+  tray.on('click', () => showWindow());
 }
 
 // ---------------------------------------------------------------------------
@@ -605,6 +868,14 @@ function createWindow() {
     mainWindow = null;
   });
 
+  // Closing hides. The renderer keeps the microphone open behind the tray
+  // icon, which is the only way a wake word can work at all.
+  mainWindow.on('close', (event) => {
+    if (quitting) return;
+    event.preventDefault();
+    mainWindow?.hide();
+  });
+
   // Never let the app frame itself navigate away or spawn popups; external
   // links go to the real browser instead.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -624,12 +895,31 @@ app.whenReady().then(() => {
   ensureMemoryFile();
   registerIpcHandlers();
   createWindow();
+  createTray();
+
+  // Summon Jarvis from anywhere, for when the wake word mishears or the mic
+  // is off entirely.
+  if (!globalShortcut.register('CommandOrControl+Alt+J', () => showWindow())) {
+    console.warn('Jarvis: Ctrl+Alt+J is taken — the summon shortcut is unavailable.');
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    else showWindow();
   });
 });
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+app.on('before-quit', () => {
+  quitting = true;
+});
+
+// Deliberately does NOT quit: the tray icon is the app now, and the renderer
+// behind it is what is listening for the wake word.
+app.on('window-all-closed', () => {});
+
+// Pilot holds a long-lived helper process and a global shortcut; neither
+// should outlive the app.
+app.on('will-quit', () => {
+  globalShortcut.unregister('CommandOrControl+Alt+J');
+  shutdownPilot();
 });

@@ -95,6 +95,21 @@ export const BotIcon = (p: IconProps) => (
 export const ChevronRightIcon = (p: IconProps) => (
   <svg {...base(p)}><path d="m9 6 6 6-6 6" /></svg>
 );
+export const PilotIcon = (p: IconProps) => (
+  <svg {...base(p)}><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M9 21h6M12 17v4" /><path d="m10 9 4 2.5-4 2.5V9Z" fill="currentColor" stroke="none" /></svg>
+);
+export const RecordIcon = (p: IconProps) => (
+  <svg {...base(p)}><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="4" fill="currentColor" stroke="none" /></svg>
+);
+export const StopIcon = (p: IconProps) => (
+  <svg {...base(p)}><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none" /></svg>
+);
+export const UndoIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M3 10h11a5 5 0 0 1 0 10h-3" /><path d="m7 6-4 4 4 4" /></svg>
+);
+export const ShieldIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M12 3 5 6v6c0 4 3 7.5 7 9 4-1.5 7-5 7-9V6l-7-3Z" /><path d="m9 12 2 2 4-4" /></svg>
+);
 
 export const APP_ICON_MAP: Record<string, (p: IconProps) => JSX.Element> = {
   chrome: ChromeIcon,

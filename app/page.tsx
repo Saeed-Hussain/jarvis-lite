@@ -14,6 +14,7 @@ import FilesView from './components/FilesView';
 import AppsView from './components/AppsView';
 import SystemView from './components/SystemView';
 import MemoryView from './components/MemoryView';
+import PilotView from './components/PilotView';
 import StatusBar from './components/StatusBar';
 import { useJarvisStore } from '@/lib/store';
 
@@ -64,6 +65,7 @@ export default function Home() {
               </section>
             )}
 
+            {view === 'pilot' && <PilotView />}
             {view === 'commands' && <CommandsView />}
             {view === 'system' && <SystemView />}
             {view === 'files' && <FilesView />}

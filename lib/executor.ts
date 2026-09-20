@@ -9,12 +9,17 @@
 
 import type { ActionResult, JarvisMemory, LogEntry, Plan, Task } from './types';
 import { KNOWN_APPS, KNOWN_SITES, PROFILE_CAPABLE_BROWSERS } from './commands';
+import { runWorkflow } from './pilot/runner';
 import { uid, formatTime } from './utils';
 
 /** Why a run stopped, so the store knows what to ask. */
 export type PauseReason =
   | { type: 'confirm'; task: Task; question: string }
-  | { type: 'missing'; task: Task; slot: 'recipient' | 'message' | 'phone'; question: string };
+  | { type: 'missing'; task: Task; slot: 'recipient' | 'message' | 'phone' | 'workflow'; question: string }
+  // A Pilot run that reached a step the guard wants a yes for. Unlike
+  // `confirm`, the work is already half-done: resuming continues the same run
+  // from the step that asked rather than starting over.
+  | { type: 'pilot'; task: Task; question: string };
 
 export interface RunOutcome {
   plan: Plan;
@@ -50,6 +55,23 @@ function log(task: Task, response: string, status: LogEntry['status']): LogEntry
   };
 }
 
+/** Parent directory of a path, without importing Node's path into the renderer. */
+function parentOf(dir: string): string {
+  const trimmed = dir.replace(/[\\/]+$/, '');
+  const cut = Math.max(trimmed.lastIndexOf('\\'), trimmed.lastIndexOf('/'));
+  if (cut <= 2) return trimmed.slice(0, 3); // already at "D:\"
+  return trimmed.slice(0, cut);
+}
+
+/** Name the workflows on offer, so "pilot" on its own is a useful question. */
+async function workflowQuestion(): Promise<string> {
+  const saved = (await bridge()?.pilot?.workflows()) ?? [];
+  if (saved.length === 0) {
+    return "I haven't recorded any workflows yet. Open the Pilot panel, press Record, and do the task once — then I can replay it.";
+  }
+  return `Which one? I have ${saved.map((w) => `"${w.name}"`).join(', ')}.`;
+}
+
 /** Look up a saved phone number for a contact name (case-insensitive). */
 function lookupContact(memory: JarvisMemory, name: string): string | undefined {
   const contacts = memory.contacts ?? {};
@@ -68,7 +90,7 @@ async function runTask(
   task: Task,
   memory: JarvisMemory,
   options: RunOptions,
-): Promise<{ result: ActionResult; response: string; memory: JarvisMemory }> {
+): Promise<{ result: ActionResult; response: string; memory: JarvisMemory; pause?: PauseReason }> {
   const api = bridge();
   const next: JarvisMemory = { ...memory };
 
@@ -192,6 +214,124 @@ async function runTask(
       };
     }
 
+    case 'open_path': {
+      const query = task.pathQuery ?? task.target ?? '';
+      // ".." is only meaningful against where we already are, so it is
+      // resolved here rather than asking the main process to guess.
+      const base = memory.last_path;
+      const resolved = query === '..' && base ? parentOf(base) : query;
+
+      const result: ActionResult & { path?: string } = api
+        ? await api.openPath(resolved, base)
+        : simulated(`Opening ${resolved}`);
+
+      if (result.success && result.path) {
+        // The new location becomes the base for the next step, which is what
+        // makes "open d drive then go to projects" work as a sequence.
+        next.last_path = result.path;
+        next.last_command = `open ${result.path}`;
+      }
+      return {
+        result: { ...result, appLabel: result.path ?? resolved, appIcon: 'folder' },
+        response: result.message,
+        memory: next,
+      };
+    }
+
+    case 'list_path': {
+      const query = task.pathQuery ?? task.target ?? '';
+      const result: ActionResult & { path?: string; folders?: string[]; files?: string[] } = api
+        ? await api.listPath(query, memory.last_path)
+        : simulated(`Listing ${query}`);
+
+      if (!result.success) return { result, response: result.message, memory: next };
+
+      next.last_path = result.path ?? next.last_path;
+      const folders = result.folders ?? [];
+      const files = result.files ?? [];
+      // Reading 200 names aloud helps nobody; name the first handful and
+      // count the rest.
+      const preview = [...folders.slice(0, 8), ...files.slice(0, 4)].join(', ');
+      const extra = folders.length + files.length - Math.min(8, folders.length) - Math.min(4, files.length);
+      const response = `${result.path} has ${folders.length} folders and ${files.length} files${
+        preview ? `: ${preview}${extra > 0 ? `, and ${extra} more` : ''}` : ''
+      }.`;
+      return { result: { ...result, appLabel: result.path, appIcon: 'folder' }, response, memory: next };
+    }
+
+    case 'pilot': {
+      const pilot = api?.pilot;
+      if (!pilot) {
+        const response =
+          'Pilot drives the screen, which only works in the desktop app — a browser tab can\'t see your other windows.';
+        return { result: { success: false, message: response }, response, memory: next };
+      }
+
+      const status = await pilot.available();
+      if (!status.available) {
+        return { result: { success: false, message: status.reason }, response: status.reason, memory: next };
+      }
+
+      const workflow = await pilot.findWorkflow(task.workflow ?? '');
+      if (!workflow) {
+        const saved = await pilot.workflows();
+        const response = saved.length
+          ? `I have no workflow called "${task.workflow}". I know: ${saved.map((w) => w.name).join(', ')}.`
+          : `I haven't recorded any workflows yet. Open the Pilot panel, press Record, and do the task once.`;
+        return { result: { success: false, message: response }, response, memory: next };
+      }
+
+      // Resuming a run that paused on a guard verdict. The approval is
+      // one-shot: a later guarded step in the same workflow asks again.
+      const paused = task.pilotRun;
+      const resuming = paused?.status === 'awaiting-approval' && paused.pendingApproval && task.pilotApprove;
+
+      const report = resuming
+        ? await runWorkflow(workflow, {
+            runId: paused!.runId,
+            approved: new Set([workflow.steps[paused!.pendingApproval!.stepIndex].id]),
+            priorSteps: paused!.steps.filter((s) => s.index < paused!.pendingApproval!.stepIndex),
+            startAt: paused!.pendingApproval!.stepIndex,
+          })
+        : await runWorkflow(workflow);
+
+      task.pilotRun = report;
+      task.pilotApprove = undefined;
+      next.last_command = `pilot ${workflow.name}`;
+
+      if (report.status === 'awaiting-approval' && report.pendingApproval) {
+        const question = report.pendingApproval.question;
+        return {
+          result: { success: false, message: question },
+          response: question,
+          memory: next,
+          pause: { type: 'pilot', task, question },
+        };
+      }
+
+      const seconds = (report.ms / 1000).toFixed(1);
+      const ran = report.steps.filter((s) => s.status === 'done').length;
+
+      if (report.status === 'done') {
+        // The numbers are the point: a workflow nobody can time is a workflow
+        // nobody can trust to be faster than doing it by hand.
+        const perStep = ran ? Math.round(report.ms / ran) : 0;
+        const response = `Ran "${workflow.name}" — ${ran} steps in ${seconds}s (${perStep}ms a step).`;
+        return { result: { success: true, message: response }, response, memory: next };
+      }
+
+      const why =
+        report.status === 'stopped'
+          ? `Stopped after ${ran} of ${workflow.steps.length} steps.`
+          : report.status === 'blocked'
+            ? `Blocked at "${report.haltedBy}": ${report.message}`
+            : `Failed at "${report.haltedBy}": ${report.message}`;
+      const undo = report.steps.some((s) => s.status === 'done')
+        ? ' Any files it changed are in the undo journal in the Pilot panel.'
+        : '';
+      return { result: { success: false, message: `${why}${undo}` }, response: `${why}${undo}`, memory: next };
+    }
+
     case 'wait': {
       const seconds = task.seconds ?? 1;
       await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
@@ -276,7 +416,9 @@ export async function runPlan(
           question:
             slot === 'recipient'
               ? 'Who should I send it to? Give me a name or a number with the country code.'
-              : 'What should the message say?',
+              : slot === 'workflow'
+                ? await workflowQuestion()
+                : 'What should the message say?',
         },
       };
     }
@@ -309,8 +451,16 @@ export async function runPlan(
     }
 
     task.status = 'running';
-    const { result, response, memory: updated } = await runTask(task, workingMemory, options);
+    const { result, response, memory: updated, pause } = await runTask(task, workingMemory, options);
     workingMemory = updated;
+
+    // A task that got part-way and now needs an answer - only Pilot does
+    // this, because only Pilot's work survives the pause.
+    if (pause) {
+      task.status = 'blocked';
+      return { plan: { ...plan, tasks }, memory: workingMemory, logs, transcript, pause };
+    }
+
     task.result = result;
     task.status = result.success ? 'done' : 'failed';
     transcript.push(response);

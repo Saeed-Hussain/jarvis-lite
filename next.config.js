@@ -11,6 +11,18 @@ const nextConfig = {
   // Relative asset URLs, otherwise /_next/... 404s under file://.
   assetPrefix: './',
   trailingSlash: true,
+
+  webpack: (config) => {
+    // The model runtime is bundled separately by scripts/build-workers.js and
+    // never reaches this graph. This alias is belt-and-braces: if anything
+    // ever does import transformers.js from app code, it must not drag in the
+    // native Node bindings, which webpack cannot parse.
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      'onnxruntime-node$': false,
+    };
+    return config;
+  },
 };
 
 module.exports = nextConfig;

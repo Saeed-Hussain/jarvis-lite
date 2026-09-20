@@ -6,7 +6,7 @@
  * executor owns all side effects, which keeps planning fully unit-testable.
  */
 
-import { normalize, splitSteps, stripWakeWord, extractSlots, Slots } from './nlu';
+import { normalize, splitSteps, stripWakeWord, extractSlots, extractPathQuery, Slots } from './nlu';
 import { KNOWN_APPS, KNOWN_SITES, looksLikeDomain } from './commands';
 import type { JarvisMemory, Task, TaskKind, Plan } from './types';
 import { uid } from './utils';
@@ -116,6 +116,52 @@ function planStep(step: string, slots: Slots, memory: JarvisMemory): Task[] {
         missing: ['recipient', 'message'],
       }),
     ];
+  }
+
+  // --- Pilot: replay a recorded workflow -----------------------------------
+  // Checked before "run X", which would otherwise resolve a workflow name to
+  // a learned shell command or an app of the same name.
+  const pilotMatch =
+    step.trim().match(/^pilot[:,]?\s*(?:run|replay|do|play)?\s*(?:the\s+)?(.*)$/i) ??
+    step.trim().match(/^(?:replay|run)\s+(?:the\s+)?(.+?)\s+workflow$/i) ??
+    step.trim().match(/^replay\s+(?:the\s+)?(.+)$/i);
+
+  if (pilotMatch) {
+    const name = pilotMatch[1]
+      .replace(/\s+workflow$/i, '')
+      .replace(/^(?:my|the)\s+/i, '')
+      .trim();
+    if (!name) {
+      // "pilot" on its own is an intent without an object - ask rather than
+      // guess which of the saved workflows was meant.
+      return [
+        task('pilot', 'Replay a workflow', {
+          status: 'blocked',
+          missing: ['workflow'],
+        }),
+      ];
+    }
+    return [task('pilot', `Replay "${name}" on screen`, { workflow: name, target: name })];
+  }
+
+  // --- drives and folders --------------------------------------------------
+  // Before the app lookup, because "open downloads" is a folder and "open the
+  // d drive" contains no app at all. extractPathQuery only fires when the
+  // sentence is genuinely about a location, so "open chrome" still opens
+  // Chrome rather than hunting for a folder of that name.
+  const location = extractPathQuery(step);
+  if (location) {
+    return [
+      task(location.list ? 'list_path' : 'open_path', location.list ? `List ${location.query}` : `Open ${location.query}`, {
+        pathQuery: location.query,
+        target: location.query,
+      }),
+    ];
+  }
+
+  // "go up" / "go back" is relative to wherever the conversation already is.
+  if (/^(?:go\s+)?(?:up|back)(?:\s+(?:one|a)?\s*(?:folder|directory|level))?$/i.test(text) && memory.last_path) {
+    return [task('open_path', 'Go up one folder', { pathQuery: '..', target: '..' })];
   }
 
   // --- system actions ------------------------------------------------------

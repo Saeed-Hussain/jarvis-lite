@@ -11,14 +11,16 @@ import {
   MemoryIcon,
   LogsIcon,
   InfoIcon,
+  PilotIcon,
 } from './Icons';
 import { useJarvisStore } from '@/lib/store';
 
-export type View = 'dashboard' | 'chat' | 'commands' | 'system' | 'files' | 'apps' | 'settings' | 'memory' | 'logs' | 'about';
+export type View = 'dashboard' | 'chat' | 'pilot' | 'commands' | 'system' | 'files' | 'apps' | 'settings' | 'memory' | 'logs' | 'about';
 
 const NAV: { id: View; label: string; icon: typeof HomeIcon }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: HomeIcon },
   { id: 'chat', label: 'Chat', icon: ChatIcon },
+  { id: 'pilot', label: 'Pilot', icon: PilotIcon },
   { id: 'commands', label: 'Commands', icon: CommandIcon },
   { id: 'system', label: 'System Control', icon: SystemIcon },
   { id: 'files', label: 'Files & Folders', icon: FolderIcon },

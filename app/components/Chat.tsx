@@ -117,6 +117,26 @@ export default function Chat() {
               </div>
             )}
 
+            {/* Nothing matched and there is no model to fall back on. Offering
+                one is a better answer than asking the user to teach every
+                phrasing they might ever use. */}
+            {msg.offerBrain && (
+              <div className="ml-9 glass-panel rounded-lg px-3 py-2.5 max-w-[75%]">
+                <p className="text-[12px]" style={{ color: 'var(--jarvis-subtext)' }}>
+                  I only know the phrasings I was written with. I can run a small language model
+                  inside the app so I understand this sort of thing on my own — it downloads once
+                  (~400MB) and nothing is sent anywhere.
+                </p>
+                <button
+                  onClick={() => useJarvisStore.getState().enableBrain()}
+                  className="mt-2 px-3 py-1.5 rounded-md text-xs font-medium text-white"
+                  style={{ backgroundColor: 'var(--jarvis-accent)' }}
+                >
+                  Turn on the local model
+                </button>
+              </div>
+            )}
+
             {msg.needsConfirmation && (
               <div className="ml-9 flex gap-2">
                 <button
