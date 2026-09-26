@@ -21,6 +21,8 @@ const root = path.join(__dirname, '..');
 const WORKERS = [
   { in: 'lib/brain/worker.ts', out: 'public/workers/brain.js' },
   { in: 'lib/voice/worker.ts', out: 'public/workers/voice.js' },
+  // Mark's local "Hey Jarvis" detector (openWakeWord on onnxruntime-web).
+  { in: 'lib/mark/wake.worker.ts', out: 'public/workers/wake.js' },
 ];
 
 async function main() {

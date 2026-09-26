@@ -16,16 +16,31 @@ import SystemView from './components/SystemView';
 import MemoryView from './components/MemoryView';
 import PilotView from './components/PilotView';
 import StatusBar from './components/StatusBar';
+import MarkHud from './components/mark/MarkHud';
 import { useJarvisStore } from '@/lib/store';
+import { useMarkStore } from '@/lib/mark/store';
+import { startMarkLive } from '@/lib/mark/live';
+// Registers the local "Hey Jarvis" detector with the Live controller.
+import '@/lib/mark/wake';
 
 export default function Home() {
-  const [view, setView] = useState<View>('dashboard');
+  const [view, setView] = useState<View>('hud');
   const hydrate = useJarvisStore((s) => s.hydrate);
   const hydrated = useJarvisStore((s) => s.hydrated);
 
   useEffect(() => {
     hydrate();
   }, [hydrate]);
+
+  // Mark LIV runs for the life of the window, whichever view is showing: it is
+  // a voice assistant, and switching to the old panels must not hang it up.
+  useEffect(() => {
+    useMarkStore
+      .getState()
+      .init()
+      .catch((e) => console.error('[Mark] init failed', e))
+      .finally(() => startMarkLive());
+  }, []);
 
   if (!hydrated) {
     return (
@@ -44,6 +59,14 @@ export default function Home() {
       <div className="flex-1 flex min-h-0">
         <Sidebar active={view} onSelect={setView} />
 
+        {/* Mark's window is full-bleed: no TopBar / StatusBar chrome around it. */}
+        {view === 'hud' && (
+          <main className="flex-1 flex min-w-0 min-h-0">
+            <MarkHud />
+          </main>
+        )}
+
+        {view !== 'hud' && (
         <main className="flex-1 flex flex-col min-w-0">
           <TopBar />
 
@@ -76,8 +99,9 @@ export default function Home() {
             {view === 'about' && <AboutView />}
           </div>
         </main>
+        )}
       </div>
-      <StatusBar onSelect={setView} />
+      {view !== 'hud' && <StatusBar onSelect={setView} />}
     </div>
   );
 }

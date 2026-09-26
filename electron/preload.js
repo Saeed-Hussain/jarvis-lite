@@ -34,6 +34,62 @@ contextBridge.exposeInMainWorld('jarvis', {
   // Lets the renderer tell a real desktop session from a plain browser tab
   isElectron: true,
 
+  // Mark LIV: the Gemini Live assistant. The renderer owns the session and
+  // the audio; everything privileged is behind these calls.
+  mark: {
+    configGet: () => ipcRenderer.invoke('mark:config-get'),
+    configSet: (fields) => ipcRenderer.invoke('mark:config-set', fields),
+    saveApiKey: (key) => ipcRenderer.invoke('mark:api-key-save', key),
+    sessionSetup: () => ipcRenderer.invoke('mark:session-setup'),
+    runTool: (name, args, extra) => ipcRenderer.invoke('mark:tool-run', name, args, extra),
+    captureScreen: () => ipcRenderer.invoke('mark:capture-screen'),
+
+    memoryList: () => ipcRenderer.invoke('mark:memory-list'),
+    memoryForget: (category, key) => ipcRenderer.invoke('mark:memory-forget', category, key),
+    memoryIdentity: () => ipcRenderer.invoke('mark:memory-identity'),
+    popLastSession: () => ipcRenderer.invoke('mark:pop-last-session'),
+    saveSessionSummary: (lines) => ipcRenderer.invoke('mark:session-summary', lines),
+
+    undoHistory: () => ipcRenderer.invoke('mark:undo-history'),
+    confirmResolve: (accepted) => ipcRenderer.invoke('mark:confirm-resolve', accepted),
+
+    pluginsList: () => ipcRenderer.invoke('mark:plugins-list'),
+    pluginToggle: (name, enabled) => ipcRenderer.invoke('mark:plugin-toggle', name, enabled),
+    pluginSettings: () => ipcRenderer.invoke('mark:plugin-settings'),
+    pluginSettingsSave: (ns, values) => ipcRenderer.invoke('mark:plugin-settings-save', ns, values),
+    pluginSettingsAction: (ns, values) => ipcRenderer.invoke('mark:plugin-settings-action', ns, values),
+    openPluginsFolder: () => ipcRenderer.invoke('mark:open-plugins-folder'),
+
+    news: (query) => ipcRenderer.invoke('mark:news', query),
+    metrics: () => ipcRenderer.invoke('mark:metrics'),
+    sysmonCheck: () => ipcRenderer.invoke('mark:sysmon-check'),
+    bgCheck: () => ipcRenderer.invoke('mark:bg-check'),
+    proactive: (payload) => ipcRenderer.invoke('mark:proactive', payload),
+
+    clipboardWatch: (on) => ipcRenderer.invoke('mark:clipboard-watch', on),
+    clipboardWrite: (text) => ipcRenderer.invoke('mark:clipboard-write', text),
+    autostartGet: () => ipcRenderer.invoke('mark:autostart-get'),
+    autostartSet: (enabled) => ipcRenderer.invoke('mark:autostart-set', enabled),
+    desktopShortcut: () => ipcRenderer.invoke('mark:desktop-shortcut'),
+    setCurrentFile: (file) => ipcRenderer.invoke('mark:set-current-file', file),
+    shutdown: () => ipcRenderer.invoke('mark:shutdown'),
+
+    pttStart: () => ipcRenderer.invoke('mark:ptt-start'),
+    pttStop: () => ipcRenderer.invoke('mark:ptt-stop'),
+
+    remoteKey: () => ipcRenderer.invoke('mark:remote-key'),
+    remoteNewKey: () => ipcRenderer.invoke('mark:remote-new-key'),
+    remoteBroadcast: (msg) => ipcRenderer.invoke('mark:remote-broadcast', msg),
+
+    // Every main → renderer event arrives here as { type, ...payload }.
+    // Returns an unsubscribe.
+    onEvent: (handler) => {
+      const listener = (_event, payload) => handler(payload);
+      ipcRenderer.on('mark:event', listener);
+      return () => ipcRenderer.removeListener('mark:event', listener);
+    },
+  },
+
   // Pilot: reading the screen and driving it. Kept as its own namespace so the
   // privileged surface is obvious at a glance in a review.
   pilot: {

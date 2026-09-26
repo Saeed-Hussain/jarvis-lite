@@ -12,12 +12,14 @@ import {
   LogsIcon,
   InfoIcon,
   PilotIcon,
+  BotIcon,
 } from './Icons';
 import { useJarvisStore } from '@/lib/store';
 
-export type View = 'dashboard' | 'chat' | 'pilot' | 'commands' | 'system' | 'files' | 'apps' | 'settings' | 'memory' | 'logs' | 'about';
+export type View = 'hud' | 'dashboard' | 'chat' | 'pilot' | 'commands' | 'system' | 'files' | 'apps' | 'settings' | 'memory' | 'logs' | 'about';
 
 const NAV: { id: View; label: string; icon: typeof HomeIcon }[] = [
+  { id: 'hud', label: 'Mark HUD', icon: BotIcon },
   { id: 'dashboard', label: 'Dashboard', icon: HomeIcon },
   { id: 'chat', label: 'Chat', icon: ChatIcon },
   { id: 'pilot', label: 'Pilot', icon: PilotIcon },

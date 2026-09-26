@@ -4,6 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const { spawn, execFile } = require('child_process');
 const { registerPilotHandlers, shutdownPilot } = require('./pilot');
+const { registerMarkHandlers, shutdownMark } = require('./mark');
 
 const isDev = process.env.NODE_ENV === 'development';
 const MEMORY_PATH = path.join(app.getPath('userData'), 'memory.json');
@@ -860,6 +861,9 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      // The Live session, the microphone and the background check-ins keep
+      // running while the window sits hidden behind the tray.
+      backgroundThrottling: false,
     },
   });
 
@@ -885,7 +889,9 @@ function createWindow() {
 
   if (isDev) {
     mainWindow.loadURL('http://localhost:3000');
-    mainWindow.webContents.openDevTools({ mode: 'detach' });
+    // Opt-in (JARVIS_DEVTOOLS=1): a detached DevTools window costs as much
+    // as the app itself.
+    if (process.env.JARVIS_DEVTOOLS === '1') mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
     mainWindow.loadFile(path.join(__dirname, '..', 'out', 'index.html'));
   }
@@ -894,6 +900,14 @@ function createWindow() {
 app.whenReady().then(() => {
   ensureMemoryFile();
   registerIpcHandlers();
+  registerMarkHandlers({
+    getWindow: () => mainWindow,
+    showWindow: () => showWindow(),
+    quit: () => {
+      quitting = true;
+      app.quit();
+    },
+  });
   createWindow();
   createTray();
 
@@ -922,4 +936,5 @@ app.on('window-all-closed', () => {});
 app.on('will-quit', () => {
   globalShortcut.unregister('CommandOrControl+Alt+J');
   shutdownPilot();
+  shutdownMark();
 });
