@@ -1,6 +1,177 @@
-# Jarvis Lite — Agentic Desktop Assistant
+# Jarvis Lite
 
-A "Jarvis"-style desktop assistant built with **Next.js + Electron**.
+A voice assistant for your desktop that talks back, has a face, and runs your
+computer.
+
+Talk to it the way you would talk to a person. It answers out loud in real
+time, in your language, while a holographic head in the middle of the window
+mouths the words. Ask it to open an app, find a file, turn the volume down,
+look at your screen, search the news or message someone, and it does it.
+
+It comes in two halves that share one window:
+
+- **[Mark HUD](#mark-hud--the-voice-assistant)** — the default view. A full port
+  of [Mark LIV](https://github.com/FatihMakes) onto Electron: Gemini Live voice,
+  lip-synced face, 24 tools, memory, undo, a phone remote. Needs a free Gemini
+  API key.
+- **[The local assistant](#the-local-assistant)** — the original jarvis-lite. A
+  rule planner, a screen-driving Pilot, an on-device language model and a
+  Whisper wake word. No API key, nothing leaves the machine.
+
+![The Mark HUD](docs/hud.png)
+
+## Mark HUD — the voice assistant
+
+### Status
+
+**It runs, and every tool is in.** The whole of Mark LIV is ported — voice,
+face, tools, memory, wake word, phone dashboard — and the build is clean.
+
+- 24 tools load: Mark's 8 core tools plus 16 actions (apps, settings, keyboard
+  and mouse, desktop, files, documents, code helper, dev agent, web search,
+  browser, YouTube, flights, weather, reminders, messaging, game updates).
+- The face is MediaPipe's 468-point face model built into a full head — 810
+  vertices, 1,554 faces — matching Mark's Python output exactly.
+- Lip-sync reads mouth shapes from the audio itself and from the transcript;
+  its numbers match Mark's to within 0.000005.
+- "Hey Jarvis" scores 0.999 on a spoken test clip and 0.0001 on an ordinary
+  sentence.
+- The phone dashboard passes 34 of 34 end-to-end checks.
+- Typecheck is clean and the original self-test still passes 40 of 40.
+
+It is light enough for a modest laptop. The face draws its surface in one pass
+rather than as ~1,800 separate canvas calls, which took its GPU cost from about
+23% to about 6%, and the gauges read from one long-lived sensor process instead
+of starting PowerShell every second.
+
+The live conversation has had real use but not systematic testing: it connects,
+talks and calls tools, and the first real-world bug it surfaced (WhatsApp
+looping when the desktop app isn't installed) is fixed. Each tool was tested on
+its own; tools driven by voice, one after another, have not been run through a
+checklist yet.
+
+### Try it
+
+```bash
+npm install
+npm run app        # builds once, then opens the fast version
+npm start          # opens it again later, without rebuilding
+```
+
+On first launch it asks for a Gemini API key — free from
+[Google AI Studio](https://aistudio.google.com/app/apikey). Then just talk.
+
+`npm run electron:dev` is for editing the code. It runs a development server
+with extra checks and is several times heavier; don't judge its speed by it.
+
+### What it does
+
+- **Real-time voice** in any language over Gemini Live. It answers in whatever
+  language you last spoke, and says one short sentence before anything slow so
+  you are never left in silence.
+- **A face that is a status light.** It looks away while thinking, meets your
+  eyes while listening, lets its lids fall while asleep, and mouths real
+  consonants — lips close on *m*, *b*, *p*. Switch to the reactor-core HUD in
+  ⚙ if you would rather not have a face looking back.
+- **Runs your computer.** Apps, volume, brightness, Wi-Fi, dark mode, windows,
+  keyboard and mouse, files and folders, documents, the browser, YouTube.
+- **Sees on request.** "What's on my screen?" or "look at me" takes one frame
+  from the screen or webcam.
+- **Remembers you.** Names, preferences, projects, people — stored on your
+  machine, shown in ⚙ → Memory, where any of it can be deleted.
+- **Takes things back.** Say "undo" and it reverses its own last change: files
+  moved, renamed, written or deleted, settings adjusted.
+- **Asks before the irreversible.** Shutdown, restart and Wi-Fi off put a
+  CONFIRM button on screen. The model cannot press it for you.
+- **Wakes on "Hey Jarvis"**, fully offline, and sleeps after two minutes of
+  quiet. Or hold **Ctrl+Space** to talk.
+- **Messages people.** WhatsApp through the installed app, or WhatsApp Web in
+  your browser when the app isn't there.
+- **Starts the day.** A morning briefing with the time, what you talked about
+  yesterday, and the news. Quiet check-ins after a long silence, alerts when the
+  CPU runs hot, and daily news on topics you ask it to follow.
+- **Phone remote.** ⚙ → Remote Control shows a QR code; scan it on the same
+  Wi-Fi and type or talk to the PC from your phone.
+- **Plugins.** Drop a `.js` file with a `PLUGIN` object and a `run()` into the
+  plugins folder and it learns a new skill.
+
+### Controlling it from your phone
+
+1. Start Jarvis on the PC. The first time, allow the firewall prompt.
+2. ⚙ (top left) → **◉ REMOTE CONTROL**.
+3. On a phone on the **same Wi-Fi**, scan the QR code — or type the manual
+   address it shows and enter the six-letter key. Accept the certificate
+   warning once; the certificate is made on your PC.
+
+Everything runs on the PC; replies are spoken there and shown as text on the
+phone. Away from home, put both devices on [Tailscale](https://tailscale.com)
+and use the PC's Tailscale address.
+
+### Limits worth knowing
+
+- **The PC does the work.** There is no phone version; the phone is a remote.
+- **WhatsApp by keystrokes.** It types into whatever window is in front, as Mark
+  did. Keep your hands off for the ~15 seconds it takes, and close any other
+  WhatsApp Web tab first or WhatsApp will ask "Use here?".
+- **YouTube trending** returns nothing: YouTube's trending page no longer lists
+  videos.
+- **Interrupting by voice is off**, as in Mark — it depends too much on the
+  room. Press **Esc** or INTERRUPT.
+- Your voice goes to Google's Gemini Live API while a session is open. That is
+  the one thing that leaves the machine.
+
+### Your data
+
+| What | Where |
+|---|---|
+| Gemini key and settings | `%APPDATA%\jarvis-lite\mark\config.json` — plain text, treat it like a password |
+| What it remembers about you | `%APPDATA%\jarvis-lite\mark\long_term.json` — delete it to make it forget |
+| Phone dashboard certificate | `%APPDATA%\jarvis-lite\mark\certs\` — delete it if your local IP changes |
+
+None of these are in the repository.
+
+### How it is built
+
+The renderer owns the conversation: the Live session, the microphone, the
+speakers and the HUD. The main process owns everything privileged: the key,
+memory, undo, the confirmation gate and every tool that touches the machine.
+They talk over `mark:*` IPC calls one way and a single `mark:event` channel the
+other.
+
+```
+lib/mark/live.ts          The Live session: connect, resume, tools, vision, background loops
+lib/mark/audio.ts         Mic at 16 kHz, speakers on one scheduled timeline
+lib/mark/viseme.ts        Mouth shapes from the audio spectrum and the transcript
+lib/mark/echo.ts          Tells your voice from its own echo after it stops talking
+lib/mark/wake*.ts         "Hey Jarvis" — openWakeWord on onnxruntime-web, in a worker
+lib/mark/avatar/          The head: mesh, rig, lighting, software renderer
+app/components/mark/      The HUD and its overlays
+
+electron/mark/index.js    IPC, inline tools, the system prompt
+electron/mark/actions/    One file per tool — drop in another to add one
+electron/mark/services/   System monitor, topic monitor, proactive check-ins
+electron/mark/dashboard.js  The phone remote: HTTPS + WebSocket
+electron/mark/gemini.js   One-shot Gemini calls, with timeouts and a model ladder
+```
+
+[docs/MARK-LIV-PORT.md](docs/MARK-LIV-PORT.md) has the contracts between the
+pieces. To run any tool on its own, headless:
+
+```bash
+npx electron scripts/mark-run-tool.js --list
+npx electron scripts/mark-run-tool.js recall_memory '{"query":""}'
+```
+
+### Credit
+
+Mark LIV is by [FatihMakes](https://www.youtube.com/@FatihMakes) and licensed
+[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) — personal and
+non-commercial use. This port inherits that licence. The face is MediaPipe's
+canonical face model, Apache 2.0.
+
+## The local assistant
+
+The original jarvis-lite, still one click away in the sidebar.
 
 A hand-written planner turns one spoken or typed sentence into an ordered plan
 of steps, then an executor runs them, pausing to ask you only about the parts

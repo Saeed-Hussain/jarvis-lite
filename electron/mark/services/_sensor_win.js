@@ -43,9 +43,15 @@ while ($true) {
       if ($t -le 0 -or $t -ge 150) { $t = $null; $acpi = $false }
     }
     if (-not $t -and $zone) {
-      $z = Get-CimInstance Win32_PerfFormattedData_Counters_ThermalZoneInformation
-      $k = ($z | ForEach-Object { if ($_.HighPrecisionTemperature) { $_.HighPrecisionTemperature / 10.0 } else { $_.Temperature } } | Measure-Object -Maximum).Maximum
-      if ($k) { $t = $k - 273.15 } else { $zone = $false }
+      # Prefer the CPU's own zone. Others are not CPU temperature, and some
+      # firmware parks a placeholder in them (a chipset zone stuck at 400 K
+      # read as 127 C), so only plausible readings count.
+      $z = Get-CimInstance Win32_PerfFormattedData_Counters_ThermalZoneInformation | ForEach-Object {
+        $c = $(if ($_.HighPrecisionTemperature) { $_.HighPrecisionTemperature / 10.0 } else { $_.Temperature }) - 273.15
+        if ($c -gt 0 -and $c -lt 105) { [pscustomobject]@{ Name = $_.Name; C = $c } }
+      }
+      $cpu = $z | Where-Object { $_.Name -match 'CPU' } | Select-Object -First 1
+      if ($cpu) { $t = $cpu.C } elseif ($z) { $t = ($z | Measure-Object -Property C -Maximum).Maximum } else { $zone = $false }
     }
     if ($t) { $o.temp = [math]::Round($t, 1) }
   }

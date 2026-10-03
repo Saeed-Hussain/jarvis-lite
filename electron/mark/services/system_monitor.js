@@ -167,9 +167,12 @@ async function cpuTemp() {
   }
   if (zoneOk !== false) {
     const r = await runPS(
-      '$z = Get-CimInstance Win32_PerfFormattedData_Counters_ThermalZoneInformation -ErrorAction Stop;' +
-        '$k = ($z | ForEach-Object { if ($_.HighPrecisionTemperature) { $_.HighPrecisionTemperature / 10.0 } else { $_.Temperature } } | Measure-Object -Maximum).Maximum;' +
-        'if ($k) { $k - 273.15 }',
+      // CPU zone first; other zones can hold firmware placeholders (see _sensor_win.js).
+      '$z = Get-CimInstance Win32_PerfFormattedData_Counters_ThermalZoneInformation -ErrorAction Stop | ForEach-Object {' +
+        ' $c = $(if ($_.HighPrecisionTemperature) { $_.HighPrecisionTemperature / 10.0 } else { $_.Temperature }) - 273.15;' +
+        ' if ($c -gt 0 -and $c -lt 105) { [pscustomobject]@{ Name = $_.Name; C = $c } } };' +
+        '$cpu = $z | Where-Object { $_.Name -match "CPU" } | Select-Object -First 1;' +
+        'if ($cpu) { $cpu.C } elseif ($z) { ($z | Measure-Object -Property C -Maximum).Maximum }',
       { timeout: 8000 },
     );
     const v = parseFloat(r.stdout.trim());
