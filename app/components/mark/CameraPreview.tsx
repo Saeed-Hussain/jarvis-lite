@@ -40,9 +40,12 @@ export default function CameraPreview() {
   return (
     <div className="mk-cam">
       <div className="mk-cam-hdr">
-        <span className="mk-cam-title">◈  CAMERA FEED</span>
-        <button className="mk-cam-close" onClick={close}>
-          ✕  CLOSE
+        <span className="mk-pill tone-speaking">
+          <i />
+          Camera live
+        </span>
+        <button className="btn sm" onClick={close}>
+          Close camera
         </button>
       </div>
       <video ref={videoRef} muted playsInline autoPlay />

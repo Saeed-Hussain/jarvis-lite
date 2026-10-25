@@ -11,21 +11,46 @@ const LINE_GAP_MS = 20;
 /** A backlog this deep is not worth typing out; show it and type what follows. */
 const MAX_BACKLOG = 60;
 
-type Tag = 'you' | 'ai' | 'file' | 'err' | 'sys';
+type Kind = 'you' | 'ai' | 'web' | 'file' | 'err' | 'sys';
 
-/** Colour by prefix, exactly in Mark's order: the first match wins. */
-function tagOf(text: string, aiName: string): Tag {
+/** What a log line is, and its text without the "Speaker:" prefix. */
+function parse(text: string, aiName: string): { kind: Kind; body: string } {
   const tl = text.toLowerCase();
-  if (tl.startsWith('you:')) return 'you';
-  if (tl.startsWith(`${aiName}:`) || tl.startsWith('jarvis:')) return 'ai';
-  if (tl.startsWith('file:')) return 'file';
-  if (tl.includes('err')) return 'err';
-  return 'sys';
+  const strip = (n: number) => text.slice(n).trimStart();
+  if (tl.startsWith('you:')) return { kind: 'you', body: strip(4) };
+  if (tl.startsWith(`${aiName}:`)) return { kind: 'ai', body: strip(aiName.length + 1) };
+  if (tl.startsWith('jarvis:')) return { kind: 'ai', body: strip(7) };
+  if (tl.startsWith('[web]:')) return { kind: 'web', body: strip(6) };
+  if (tl.startsWith('file:')) return { kind: 'file', body: strip(5) };
+  if (tl.startsWith('err:')) return { kind: 'err', body: strip(4) };
+  if (tl.startsWith('net:')) return { kind: 'err', body: strip(4) };
+  if (tl.startsWith('sys:')) return { kind: 'sys', body: strip(4) };
+  if (tl.includes('err')) return { kind: 'err', body: text };
+  return { kind: 'sys', body: text };
+}
+
+function Line({ line, shown, aiName, aiLabel }: { line: LogLine; shown?: number; aiName: string; aiLabel: string }) {
+  const { kind, body } = parse(line.text, aiName);
+  // While typing, reveal the body in step with the raw line's progress.
+  const prefix = line.text.length - body.length;
+  const text = shown == null ? body : body.slice(0, Math.max(0, shown - prefix));
+  if (kind === 'you' || kind === 'web' || kind === 'ai') {
+    return (
+      <div className={`mk-msg ${kind === 'ai' ? 'ai' : 'you'}`}>
+        {kind === 'ai' && <span className="mk-msg-who">{aiLabel}</span>}
+        {kind === 'web' && <span className="mk-msg-who">From your phone</span>}
+        <div className="mk-bubble">{text || ' '}</div>
+      </div>
+    );
+  }
+  return <div className={`mk-note ${kind}`}>{text || ' '}</div>;
 }
 
 export default function LogPanel() {
   const logs = useMarkStore((s) => s.logs);
-  const aiName = useMarkStore((s) => (s.config?.assistant_name || 'jarvis').trim().toLowerCase());
+  const rawName = useMarkStore((s) => (s.config?.assistant_name || 'jarvis').trim());
+  const aiName = rawName.toLowerCase();
+  const aiLabel = rawName.length <= 4 ? rawName.toUpperCase() : rawName.charAt(0).toUpperCase() + rawName.slice(1).toLowerCase();
 
   // Everything already in the log when the panel mounts is history: show it
   // at once rather than re-typing a whole session on every view switch.
@@ -83,16 +108,16 @@ export default function LogPanel() {
   const done = logs.filter((l) => l.id <= shownId);
   return (
     <div className="mk-log" ref={boxRef} onScroll={onScroll}>
-      {done.map((l) => (
-        <div key={l.id} className={`mk-log-${tagOf(l.text, aiName)}`}>
-          {l.text || ' '}
-        </div>
-      ))}
-      {typing && pos > 0 && (
-        <div key={typing.id} className={`mk-log-${tagOf(typing.text, aiName)}`}>
-          {typing.text.slice(0, pos)}
+      {!done.length && !typing && (
+        <div className="mk-empty">
+          <b>Say hello.</b>
+          <span>Talk, or type below. Everything you and {aiLabel} say appears here.</span>
         </div>
       )}
+      {done.map((l) => (
+        <Line key={l.id} line={l} aiName={aiName} aiLabel={aiLabel} />
+      ))}
+      {typing && pos > 0 && <Line key={typing.id} line={typing} shown={pos} aiName={aiName} aiLabel={aiLabel} />}
     </div>
   );
 }

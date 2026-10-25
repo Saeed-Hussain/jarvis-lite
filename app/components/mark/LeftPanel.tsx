@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { markBridge } from '@/lib/mark/types';
 import type { Metrics } from '@/lib/mark/types';
 import { useMarkStore } from '@/lib/mark/store';
+import { isVisible } from '@/lib/visibility';
 import MetricBar from './MetricBar';
 
 export const APP_VERSION = 'MARK LIV';
@@ -32,8 +33,9 @@ export default function LeftPanel() {
     let alive = true;
     let busy = false;
     const tick = async () => {
-      // A slow sample (WMI on a busy machine) must not stack up behind itself.
-      if (busy) return;
+      // A slow sample (WMI on a busy machine) must not stack up behind itself,
+      // and gauges nobody can see are not worth sampling.
+      if (busy || !isVisible()) return;
       busy = true;
       try {
         const next = await bridge.metrics();
@@ -66,38 +68,56 @@ export default function LeftPanel() {
   const netText = net == null ? '--' : net < 1 ? `${(net * 1024).toFixed(0)}KB/s` : `${net.toFixed(1)}MB/s`;
   const osName = os === 'windows' ? 'WIN' : os === 'mac' ? 'macOS' : os === 'linux' ? 'LINUX' : '--';
 
-  return (
-    <div className="mk-left">
-      <div className="mk-sec-hdr">◈ SYS MONITOR</div>
-      <MetricBar label="CPU" color="var(--mk-pri)" value={cpu ?? 0} text={cpu == null ? '--' : `${cpu.toFixed(0)}%`} />
-      <MetricBar label="MEM" color="var(--mk-acc2)" value={mem ?? 0} text={mem == null ? '--' : `${mem.toFixed(0)}%`} />
-      <MetricBar label="NET" color="var(--mk-green)" value={net == null ? 0 : Math.min(100, net * 10)} text={netText} />
-      <MetricBar
-        label="GPU"
-        color="var(--mk-acc)"
-        value={gpu != null && gpu >= 0 ? gpu : 0}
-        text={m == null ? '--' : gpu != null && gpu >= 0 ? `${gpu.toFixed(0)}%` : 'N/A'}
-      />
-      <MetricBar
-        label="TMP"
-        color="#ff6688"
-        value={tmp != null && tmp >= 0 ? Math.min(100, tmp) : 0}
-        text={m == null ? '--' : tmp != null && tmp >= 0 ? `${tmp.toFixed(0)}°C` : 'N/A'}
-      />
+  const up = uptime == null ? '--' : `${Math.floor(uptime / 3600)}h ${pad(Math.floor((uptime % 3600) / 60))}m`;
+  const osLabel = os === 'windows' ? 'Windows' : os === 'mac' ? 'macOS' : os === 'linux' ? 'Linux' : '--';
+  void osName;
 
-      <div className="mk-info">
-        <span style={{ color: 'var(--mk-green)', fontWeight: 'bold' }}>
-          {uptime == null ? 'UP  --:--' : `UP  ${pad(Math.floor(uptime / 3600))}:${pad(Math.floor((uptime % 3600) / 60))}`}
-        </span>
-        <span style={{ color: 'var(--mk-text-med)' }}>{procs == null ? 'PROC  --' : `PROC  ${procs}`}</span>
-        <span style={{ color: 'var(--mk-acc2)' }}>OS  {osName}</span>
+  return (
+    <aside className="mk-left glass">
+      <div className="mk-card-title">
+        <span>System</span>
+        <span className="mk-live-dot" title="Live" />
       </div>
+      <div className="mk-metrics">
+        <MetricBar label="CPU" color="var(--accent)" value={cpu ?? 0} text={cpu == null ? '--' : `${cpu.toFixed(0)}%`} />
+        <MetricBar label="Memory" color="var(--accent)" value={mem ?? 0} text={mem == null ? '--' : `${mem.toFixed(0)}%`} />
+        <MetricBar label="Network" color="var(--good)" value={net == null ? 0 : Math.min(100, net * 10)} text={netText} />
+        <MetricBar
+          label="GPU"
+          color="var(--think)"
+          value={gpu != null && gpu >= 0 ? gpu : 0}
+          text={m == null || gpu == null ? '--' : gpu >= 0 ? `${gpu.toFixed(0)}%` : 'N/A'}
+        />
+        <MetricBar
+          label="Temperature"
+          color="var(--warn)"
+          value={tmp != null && tmp >= 0 ? Math.min(100, tmp) : 0}
+          text={m == null || tmp == null ? '--' : tmp > 0 ? `${tmp.toFixed(0)}°C` : 'N/A'}
+        />
+      </div>
+
+      <dl className="mk-info">
+        <div>
+          <dt>Uptime</dt>
+          <dd className="mono tnum">{up}</dd>
+        </div>
+        <div>
+          <dt>Processes</dt>
+          <dd className="mono tnum">{procs == null ? '--' : procs}</dd>
+        </div>
+        <div>
+          <dt>System</dt>
+          <dd>{osLabel}</dd>
+        </div>
+      </dl>
 
       <div style={{ flex: 1 }} />
 
-      <div className="mk-tag" style={{ color: 'var(--mk-green)' }}>{'AI CORE\nACTIVE'}</div>
-      <div className="mk-tag" style={{ color: 'var(--mk-pri)' }}>{'SEC\nCLEARED'}</div>
-      <div className="mk-tag" style={{ color: 'var(--mk-text-dim)' }}>{`PROTOCOL\n${APP_PROTOCOL}`}</div>
-    </div>
+      <div className="mk-tags">
+        <span className="chip"><i className="dot" style={{ color: 'var(--good)' }} />AI core</span>
+        <span className="chip"><i className="dot" style={{ color: 'var(--accent)' }} />Secure</span>
+        <span className="chip">Protocol {APP_PROTOCOL}</span>
+      </div>
+    </aside>
   );
 }

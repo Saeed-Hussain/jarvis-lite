@@ -13,7 +13,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useMarkStore } from '@/lib/mark/store';
 import { markBridge, type MemoryRow } from '@/lib/mark/types';
-import { Lbl, Panel, Sep, errText } from './common';
+import { CloseIcon, MemoryIcon } from '../../Icons';
+import { Modal, displayName, errText } from './common';
 
 const rowId = (r: MemoryRow) => `${r.category}\u0000${r.key}`;
 
@@ -73,43 +74,56 @@ export default function MemoryOverlay() {
   };
 
   const count = rows?.length ?? 0;
-  const visible = rows ? rows.length - [...leaving].filter((id) => rows.some((r) => rowId(r) === id)).length : 0;
+  const close = () => useMarkStore.getState().setOverlay(null);
 
   return (
-    <Panel width={520} margins={[20, 16]} spacing={5} style={{ transition: 'height 180ms ease' }}>
-      <Lbl pt={12} bold>
-        {`🧠  WHAT ${name.toUpperCase()} REMEMBERS`}
-      </Lbl>
-      <Sep />
-      <Lbl pt={7} color="var(--o-text-dim)">
-        {rows === null
+    <Modal
+      width={540}
+      icon={<MemoryIcon />}
+      title={`What ${displayName(name)} remembers`}
+      description={
+        rows === null
           ? 'Reading memory…'
-          : `${count} stored facts — newest first. Nothing here is sent anywhere; it lives in ` +
-            `long_term.json on this machine.`}
-      </Lbl>
-
+          : `${count} stored facts, newest first. Nothing here is sent anywhere — it lives in ` +
+            `long_term.json on this machine.`
+      }
+      onClose={close}
+      footer={
+        <button className="btn primary" onClick={close}>
+          Done
+        </button>
+      }
+    >
       {rows !== null && rows.length === 0 && (
-        <Lbl pt={9} color="var(--o-text-med)">
-          Nothing stored yet.
-        </Lbl>
+        <div className="mko-well">
+          <div className="mko-empty">
+            <span className="mko-empty-ico">
+              <MemoryIcon />
+            </span>
+            <b>Nothing stored yet</b>
+            Things you tell it to remember will show up here.
+          </div>
+        </div>
       )}
 
       {rows !== null && rows.length > 0 && (
-        <div
-          className="mko-scroll"
-          style={{ height: Math.min(420, 34 * Math.max(visible, 1) + 10), flex: 'none' }}
-        >
+        <div className="mko-well rows mko-mem">
           {rows.map((r) => {
             const id = rowId(r);
             return (
               <div key={id} className={`mko-mem-row${leaving.has(id) ? ' leaving' : ''}`}>
-                <div className="mko-mem-txt">
-                  <b>{r.key.replace(/_/g, ' ')}</b>{' '}
-                  <span style={{ color: 'var(--o-text-med)' }}>— {r.value}</span>
+                <div className="mko-mem-text">
+                  <span className="mko-mem-key">{r.key.replace(/_/g, ' ')}</span>
+                  <span className="mko-mem-val">{r.value}</span>
+                  <span className="mko-mem-meta">{`${r.category} · ${r.updated || '—'}`}</span>
                 </div>
-                <div className="mko-mem-meta">{`${r.category.slice(0, 4)} · ${r.updated || '—'}`}</div>
-                <button className="mko-x" title="Forget this" onClick={() => forget(r)}>
-                  ✕
+                <button
+                  className="btn ghost icon sm mko-forget"
+                  title="Forget this"
+                  aria-label={`Forget ${r.key.replace(/_/g, ' ')}`}
+                  onClick={() => forget(r)}
+                >
+                  <CloseIcon width={15} height={15} />
                 </button>
               </div>
             );
@@ -117,19 +131,7 @@ export default function MemoryOverlay() {
         </div>
       )}
 
-      {error && (
-        <Lbl pt={7} color="#ff6b6b">
-          {error}
-        </Lbl>
-      )}
-
-      <button
-        className="mko-btn mko-btn-sec"
-        style={{ height: 30, flex: 'none' }}
-        onClick={() => useMarkStore.getState().setOverlay(null)}
-      >
-        CLOSE
-      </button>
-    </Panel>
+      {error && <div className="mko-err">{error}</div>}
+    </Modal>
   );
 }

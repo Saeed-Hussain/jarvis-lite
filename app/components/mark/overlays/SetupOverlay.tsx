@@ -6,7 +6,8 @@
 import { useState } from 'react';
 import { useMarkStore } from '@/lib/mark/store';
 import type { MarkConfig } from '@/lib/mark/types';
-import { Gap, Lbl, Panel, Sep } from './common';
+import { LinkIcon } from '../../Icons';
+import { Field } from './common';
 
 type OsKey = MarkConfig['os'];
 
@@ -19,17 +20,13 @@ function detectOs(): OsKey {
 }
 
 const OS_BTNS: [OsKey, string][] = [
-  ['windows', '⊞  Windows'],
-  ['mac', '  macOS'],
-  ['linux', '🐧  Linux'],
+  ['windows', 'Windows'],
+  ['mac', 'macOS'],
+  ['linux', 'Linux'],
 ];
 const OS_NAME: Record<OsKey, string> = { windows: 'Windows', mac: 'macOS', linux: 'Linux' };
-// Selected-button colours per OS, as in Mark's _sel(): (fg, bg).
-const OS_PAL: Record<OsKey, [string, string]> = {
-  windows: ['var(--o-pri)', '#001a22'],
-  mac: ['var(--o-acc2)', '#1a1400'],
-  linux: ['var(--o-green)', '#001a0d'],
-};
+
+const KEY_URL = 'https://aistudio.google.com/app/apikey';
 
 export default function SetupOverlay() {
   const [detected] = useState<OsKey>(detectOs);
@@ -57,71 +54,74 @@ export default function SetupOverlay() {
   };
 
   return (
-    <Panel width={460} margins={[30, 22]} spacing={8}>
-      <Lbl pt={13} bold align="center">
-        ◈  INITIALISATION REQUIRED
-      </Lbl>
-      <Lbl pt={9} align="center" color="var(--o-pri-dim)">
-        Configure J.A.R.V.I.S. before first boot.
-      </Lbl>
-      <Gap h={6} />
-      <Sep />
-      <Gap h={4} />
-
-      <Lbl pt={8} color="var(--o-text-dim)">
-        GEMINI API KEY
-      </Lbl>
-      <input
-        className={`mko-input${bad ? ' mko-bad' : ''}`}
-        type="password"
-        placeholder="AIza…"
-        value={key}
-        autoFocus
-        spellCheck={false}
-        onChange={(e) => {
-          setKey(e.target.value);
-          if (bad) setBad(false);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') submit();
-        }}
-      />
-      <Gap h={12} />
-      <Sep />
-      <Gap h={4} />
-
-      <Lbl pt={8} color="var(--o-text-dim)">
-        OPERATING SYSTEM
-      </Lbl>
-      <Lbl pt={8} color="var(--o-acc2)">
-        {`Auto-detected: ${OS_NAME[detected]}`}
-      </Lbl>
-      <div className="mko-row" style={{ gap: 6 }}>
-        {OS_BTNS.map(([k, label]) => {
-          const sel = k === os;
-          const [fg, bg] = OS_PAL[k];
-          return (
-            <button
-              key={k}
-              className={`mko-os-btn${sel ? ' sel' : ''}`}
-              style={sel ? { background: fg, color: bg } : undefined}
-              onClick={() => setOs(k)}
-            >
-              {label}
-            </button>
-          );
-        })}
+    <div className="mko-modal mko-setup glass-strong" style={{ width: 440 }} role="dialog" aria-modal="true" aria-labelledby="mko-setup-t">
+      <div className="mko-hero">
+        <div className="mko-brand">
+          <span />
+        </div>
+        <h2 id="mko-setup-t">Welcome to Jarvis</h2>
+        <p>Add your Gemini API key and pick your system — that’s all it needs to start talking.</p>
       </div>
-      <Gap h={12} />
 
-      <button
-        className="mko-btn mko-btn-pri"
-        style={{ height: 36, fontSize: '13.3px' }}
-        disabled={busy}
-        onClick={submit}
-      >
-        {busy ? '▸  INITIALISING…' : '▸  INITIALISE SYSTEMS'}
-      </button>
-    </Panel>
+      <div className="mko-content">
+        <Field
+          label="Gemini API key"
+          hint={
+            bad ? (
+              <span className="mko-err">Enter a valid Gemini API key to continue.</span>
+            ) : (
+              <>
+                Don’t have one?{' '}
+                <a className="mko-link" href={KEY_URL} target="_blank" rel="noreferrer">
+                  Get a free key at aistudio.google.com
+                  <LinkIcon />
+                </a>
+              </>
+            )
+          }
+        >
+          <input
+            className={`field mono${bad ? ' mko-bad' : ''}`}
+            type="password"
+            placeholder="AIza…"
+            value={key}
+            autoFocus
+            spellCheck={false}
+            aria-invalid={bad}
+            onChange={(e) => {
+              setKey(e.target.value);
+              if (bad) setBad(false);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') submit();
+            }}
+          />
+        </Field>
+
+        <div className="mko-field">
+          <span className="mko-field-top">
+            <span className="mko-label">Operating system</span>
+            <span className="chip">
+              <i className="dot" style={{ color: 'var(--good)' }} />
+              {`Detected: ${OS_NAME[detected]}`}
+            </span>
+          </span>
+          <div className="mk-seg mko-seg" role="radiogroup" aria-label="Operating system">
+            {OS_BTNS.map(([k, label]) => {
+              const sel = k === os;
+              return (
+                <button key={k} className={sel ? 'on' : ''} role="radio" aria-checked={sel} onClick={() => setOs(k)}>
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <button className="btn primary" disabled={busy} onClick={submit}>
+          {busy ? 'Setting up…' : 'Get started'}
+        </button>
+      </div>
+    </div>
   );
 }

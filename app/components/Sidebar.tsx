@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import {
   HomeIcon,
   ChatIcon,
@@ -13,96 +14,333 @@ import {
   InfoIcon,
   PilotIcon,
   BotIcon,
+  SunIcon,
+  MoonIcon,
+  SparkIcon,
 } from './Icons';
-import { useJarvisStore } from '@/lib/store';
+import { useTheme } from '../context/ThemeContext';
+import { useMarkStore } from '@/lib/mark/store';
+import type { HudState } from '@/lib/mark/types';
 
 export type View = 'hud' | 'dashboard' | 'chat' | 'pilot' | 'commands' | 'system' | 'files' | 'apps' | 'settings' | 'memory' | 'logs' | 'about';
 
-const NAV: { id: View; label: string; icon: typeof HomeIcon }[] = [
-  { id: 'hud', label: 'Mark HUD', icon: BotIcon },
-  { id: 'dashboard', label: 'Dashboard', icon: HomeIcon },
-  { id: 'chat', label: 'Chat', icon: ChatIcon },
-  { id: 'pilot', label: 'Pilot', icon: PilotIcon },
-  { id: 'commands', label: 'Commands', icon: CommandIcon },
-  { id: 'system', label: 'System Control', icon: SystemIcon },
-  { id: 'files', label: 'Files & Folders', icon: FolderIcon },
-  { id: 'apps', label: 'Apps', icon: AppsIcon },
-  { id: 'settings', label: 'Settings', icon: SettingsIcon },
-  { id: 'memory', label: 'Memory', icon: MemoryIcon },
-  { id: 'logs', label: 'Logs', icon: LogsIcon },
-  { id: 'about', label: 'About', icon: InfoIcon },
+type Item = { id: View; label: string; icon: typeof HomeIcon };
+
+const SECTIONS: { title?: string; items: Item[] }[] = [
+  { items: [{ id: 'hud', label: 'Assistant', icon: BotIcon }] },
+  {
+    title: 'Local',
+    items: [
+      { id: 'dashboard', label: 'Dashboard', icon: HomeIcon },
+      { id: 'chat', label: 'Chat', icon: ChatIcon },
+      { id: 'pilot', label: 'Pilot', icon: PilotIcon },
+      { id: 'commands', label: 'Commands', icon: CommandIcon },
+    ],
+  },
+  {
+    title: 'Computer',
+    items: [
+      { id: 'system', label: 'System Control', icon: SystemIcon },
+      { id: 'files', label: 'Files & Folders', icon: FolderIcon },
+      { id: 'apps', label: 'Apps', icon: AppsIcon },
+    ],
+  },
+  {
+    title: 'More',
+    items: [
+      { id: 'memory', label: 'Memory', icon: MemoryIcon },
+      { id: 'logs', label: 'Logs', icon: LogsIcon },
+      { id: 'settings', label: 'Settings', icon: SettingsIcon },
+      { id: 'about', label: 'About', icon: InfoIcon },
+    ],
+  },
 ];
 
+const STATE_LABEL: Record<HudState, string> = {
+  LISTENING: 'Listening',
+  SPEAKING: 'Speaking',
+  THINKING: 'Thinking',
+  SLEEPING: 'Asleep',
+};
+
 export default function Sidebar({ active, onSelect }: { active: View; onSelect: (v: View) => void }) {
-  const isListening = useJarvisStore((s) => s.isListening);
+  const { theme, toggleTheme, effects, toggleEffects } = useTheme();
+  const name = useMarkStore((s) => (s.config?.assistant_name || 'Jarvis').trim() || 'Jarvis');
+  const state = useMarkStore((s) => s.state);
+  const muted = useMarkStore((s) => s.muted);
+  const connected = useMarkStore((s) => s.connected);
+  const configured = useMarkStore((s) => !!s.config?.configured);
+
+  // Resolved after mount so the static export and the first render agree.
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
+
+  const status = !ready
+    ? 'Starting'
+    : !configured
+      ? 'Needs an API key'
+      : !connected
+        ? 'Connecting'
+        : muted
+          ? 'Muted'
+          : STATE_LABEL[state];
+  const tone = !connected || !configured ? 'idle' : muted ? 'muted' : state.toLowerCase();
 
   return (
-    <aside className="w-[224px] shrink-0 h-full flex flex-col glass-panel border-r px-3 py-4">
-      {/* Logo */}
-      <div className="flex items-center gap-2.5 px-1.5 mb-4">
-        <div className="relative w-9 h-9 shrink-0 flex items-center justify-center rounded-full border-2 border-jarvis-accent2/60" style={{ borderColor: 'var(--jarvis-accent-2)' }}>
-          <div className="absolute inset-0 rounded-full animate-pulseRing" style={{ border: '2px solid var(--jarvis-accent-2)' }} />
-          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'var(--jarvis-accent-2)' }} />
+    <aside className="sb glass">
+      <div className="sb-brand app-drag">
+        <div className="sb-mark">
+          <span />
         </div>
-        <div className="leading-tight">
-          <p className="text-[15px] font-bold tracking-wide">
-            JARVIS <span style={{ color: 'var(--jarvis-accent)' }}>LITE</span>
-          </p>
-          <p className="text-[11px] tracking-[0.2em] text-jarvis-subtext" style={{ color: 'var(--jarvis-subtext)' }}>
-            AI ASSISTANT
-          </p>
+        <div className="sb-brand-text">
+          <span className="sb-name">{titleCase(name)}</span>
+          <span className="sb-tag">Personal assistant</span>
         </div>
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 flex flex-col gap-0.5 overflow-y-auto">
-        {NAV.map((item) => {
-          const isActive = active === item.id;
-          const Icon = item.icon;
-          return (
-            <button
-              key={item.id}
-              onClick={() => onSelect(item.id)}
-              className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium active:scale-[0.98] ${
-                isActive ? 'text-white' : 'hover:bg-black/5 dark:hover:bg-white/5'
-              }`}
-              style={{
-                backgroundColor: isActive ? 'var(--jarvis-accent)' : 'transparent',
-                color: isActive ? '#fff' : 'var(--jarvis-text)',
-              }}
-            >
-              <Icon className="opacity-90" width={16} height={16} />
-              <span>{item.label}</span>
-            </button>
-          );
-        })}
+      <nav className="sb-nav">
+        {SECTIONS.map((sec, i) => (
+          <div key={i} className="sb-sec">
+            {sec.title && <div className="sb-sec-title">{sec.title}</div>}
+            {sec.items.map((item) => {
+              const Icon = item.icon;
+              const on = active === item.id;
+              return (
+                <button key={item.id} className={`sb-item${on ? ' on' : ''}`} onClick={() => onSelect(item.id)} aria-current={on ? 'page' : undefined}>
+                  <Icon width={17} height={17} />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        ))}
       </nav>
 
-      {/* Listening indicator */}
-      <div className="mt-3 rounded-xl glass-panel py-4 flex flex-col items-center gap-2">
-        <p className="text-sm text-jarvis-subtext" style={{ color: 'var(--jarvis-subtext)' }}>
-          {isListening ? 'Listening...' : 'Idle'}
-        </p>
-        <div className="relative w-14 h-14 rounded-full flex items-center justify-center border" style={{ borderColor: 'var(--jarvis-accent)' }}>
-          {isListening && <div className="absolute inset-0 rounded-full animate-pulseRing" style={{ border: '2px solid var(--jarvis-accent)' }} />}
-          <div className="flex items-end gap-[2px] h-5">
-            {[0, 1, 2, 3, 4].map((i) => (
-              <span
-                key={i}
-                className={`w-[2px] rounded-full ${isListening ? 'animate-wave' : ''}`}
-                style={{
-                  height: isListening ? '100%' : '35%',
-                  backgroundColor: 'var(--jarvis-accent)',
-                  animationDelay: `${i * 0.12}s`,
-                }}
-              />
-            ))}
-          </div>
-        </div>
-        <p className="text-xs text-jarvis-subtext" style={{ color: 'var(--jarvis-subtext)' }}>
-          {isListening ? 'Tap to stop' : 'Tap mic to speak'}
-        </p>
+      <button className={`sb-status tone-${tone}`} onClick={() => onSelect('hud')} title="Open the assistant">
+        <span className="sb-orb">
+          <i />
+        </span>
+        <span className="sb-status-text">
+          <b>{titleCase(name)}</b>
+          <small>{status}</small>
+        </span>
+      </button>
+
+      <div className="sb-foot">
+        <button className="btn ghost icon sm" onClick={toggleTheme} title={theme === 'dark' ? 'Light theme' : 'Dark theme'} aria-label="Toggle theme">
+          {theme === 'dark' ? <SunIcon width={17} height={17} /> : <MoonIcon width={17} height={17} />}
+        </button>
+        <button
+          className={`btn ghost icon sm${effects === 'lite' ? '' : ' fx-on'}`}
+          onClick={toggleEffects}
+          title={effects === 'lite' ? 'Effects: lite — the background holds still. Click for full.' : 'Effects: full — the background drifts. Click for lite (lighter on the GPU).'}
+          aria-label="Toggle background motion"
+        >
+          <SparkIcon width={17} height={17} />
+        </button>
       </div>
+
+      <style jsx>{`
+        .sb {
+          display: flex;
+          flex-direction: column;
+          min-height: 0;
+          border-radius: var(--radius-lg);
+          padding: 14px 10px 10px;
+          overflow: hidden;
+        }
+        .sb-brand {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 2px 6px 12px;
+        }
+        .sb-mark {
+          flex: none;
+          width: 32px;
+          height: 32px;
+          border-radius: 10px;
+          display: grid;
+          place-items: center;
+          background: var(--primary);
+          box-shadow: 0 6px 16px -6px rgba(var(--accent-rgb), 0.8);
+        }
+        .sb-mark span {
+          width: 12px;
+          height: 12px;
+          border-radius: 50%;
+          background: radial-gradient(circle at 35% 35%, #fff, var(--accent) 60%);
+          box-shadow: 0 0 10px var(--accent);
+        }
+        .sb-brand-text {
+          display: flex;
+          flex-direction: column;
+          line-height: 1.15;
+          min-width: 0;
+        }
+        .sb-name {
+          font-size: 15.5px;
+          font-weight: 650;
+          letter-spacing: -0.02em;
+        }
+        .sb-tag {
+          font-size: 11.5px;
+          color: var(--ink-3);
+        }
+        .sb-nav {
+          flex: 1;
+          min-height: 0;
+          overflow-y: auto;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          padding-right: 2px;
+        }
+        .sb-sec {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+        .sb-sec + .sb-sec {
+          margin-top: 6px;
+        }
+        .sb-sec-title {
+          padding: 2px 12px 2px;
+          font-size: 11.5px;
+          font-weight: 560;
+          color: var(--ink-3);
+        }
+        .sb-item {
+          display: flex;
+          align-items: center;
+          gap: 11px;
+          height: 34px;
+          padding: 0 12px;
+          border-radius: 12px;
+          font-size: 13.5px;
+          font-weight: 520;
+          color: var(--ink-2);
+          background: transparent;
+          border: 1px solid transparent;
+          text-align: left;
+          transition: background 0.2s var(--ease), color 0.2s, border-color 0.2s, transform 0.2s var(--spring);
+        }
+        .sb-item:hover {
+          background: var(--fill-2);
+          color: var(--ink);
+        }
+        .sb-item:active {
+          transform: scale(0.985);
+        }
+        .sb-item.on {
+          color: var(--ink);
+          background: var(--glass-strong);
+          border-color: var(--line);
+          box-shadow: inset 0 1px 0 var(--highlight), var(--shadow-sm);
+        }
+        .sb-item.on :global(svg) {
+          color: var(--accent-ink);
+        }
+        .sb-status {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-top: 8px;
+          padding: 8px 10px;
+          border-radius: 14px;
+          background: var(--fill);
+          border: 1px solid var(--line);
+          text-align: left;
+          transition: background 0.2s;
+        }
+        .sb-status:hover {
+          background: var(--fill-2);
+        }
+        .sb-orb {
+          position: relative;
+          flex: none;
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          display: grid;
+          place-items: center;
+          background: var(--fill-2);
+        }
+        .sb-orb i {
+          width: 10px;
+          height: 10px;
+          border-radius: 50%;
+          background: var(--ink-4);
+          transition: background 0.3s, box-shadow 0.3s;
+        }
+        .tone-listening .sb-orb i {
+          background: var(--good);
+          box-shadow: 0 0 10px var(--good);
+        }
+        .tone-speaking .sb-orb i {
+          background: var(--accent);
+          box-shadow: 0 0 12px var(--accent);
+          animation: sb-pulse 1s ease-in-out infinite;
+        }
+        .tone-thinking .sb-orb i {
+          background: var(--think);
+          box-shadow: 0 0 10px var(--think);
+          animation: sb-pulse 0.7s ease-in-out infinite;
+        }
+        .tone-muted .sb-orb i {
+          background: var(--bad);
+        }
+        .sb-status-text {
+          display: flex;
+          flex-direction: column;
+          line-height: 1.25;
+          min-width: 0;
+        }
+        .sb-status-text b {
+          font-size: 13px;
+          font-weight: 600;
+        }
+        .sb-status-text small {
+          font-size: 11.5px;
+          color: var(--ink-3);
+        }
+        .sb-foot {
+          display: flex;
+          gap: 2px;
+          padding: 8px 2px 0;
+          color: var(--ink-2);
+        }
+        .sb-foot .fx-on {
+          color: var(--accent-ink);
+        }
+        /* Short windows: tighter rows and no section captions, so the whole
+           list fits without a scrollbar. */
+        @media (max-height: 760px) {
+          .sb-item {
+            height: 30px;
+          }
+          .sb-sec-title {
+            display: none;
+          }
+          .sb-sec + .sb-sec {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid var(--line);
+          }
+          .sb-brand {
+            padding-bottom: 8px;
+          }
+        }
+        @keyframes sb-pulse {
+          50% {
+            transform: scale(1.35);
+          }
+        }
+      `}</style>
     </aside>
   );
+}
+
+function titleCase(s: string): string {
+  return s.length <= 4 && s === s.toUpperCase() ? s : s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }

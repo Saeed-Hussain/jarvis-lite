@@ -72,14 +72,13 @@ interface Props {
   size: number | null;
   onPick(path: string, size: number | null): void;
   onClear(): void;
+  assistantName?: string;
 }
 
-/** FileDropZone + _DropCanvas: drop a file or click to browse. */
-export default function FileDropZone({ file, size, onPick, onClear }: Props) {
-  const [hover, setHover] = useState(false);
+/** Drop a file or click to browse. One line at rest; the target grows while dragging. */
+export default function FileDropZone({ file, size, onPick, onClear, assistantName = 'Jarvis' }: Props) {
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const boxRef = useRef<HTMLDivElement>(null);
 
   const browse = () => inputRef.current?.click();
 
@@ -96,33 +95,12 @@ export default function FileDropZone({ file, size, onPick, onClear }: Props) {
     if (f && p) onPick(p, f.size);
   };
 
-  const onClick = (e: React.MouseEvent) => {
-    // The ✕ sits in the right-hand 34 px of the zone while a file is loaded.
-    const r = boxRef.current?.getBoundingClientRect();
-    if (file && r && e.clientX > r.right - 34) {
-      onClear();
-      return;
-    }
-    browse();
-  };
-
-  const bg = dragOver ? '#001a24' : hover ? '#001218' : 'var(--mk-panel)';
-  const border = file
-    ? 'rgba(0, 255, 136, 0.78)'
-    : dragOver
-      ? 'var(--mk-pri)'
-      : hover
-        ? 'var(--mk-border-b)'
-        : 'var(--mk-border)';
-  const marching = hover || dragOver;
+  const name = assistantName.charAt(0).toUpperCase() + assistantName.slice(1).toLowerCase();
 
   return (
     <div
-      className="mk-drop"
-      ref={boxRef}
-      onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      className={`mk-drop${dragOver ? ' over' : ''}${file ? ' loaded' : ''}`}
+      onClick={() => (file ? undefined : browse())}
       onDragEnter={(e) => {
         if (e.dataTransfer.types.includes('Files')) {
           e.preventDefault();
@@ -136,23 +114,13 @@ export default function FileDropZone({ file, size, onPick, onClear }: Props) {
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragOver(false);
       }}
       onDrop={onDrop}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (!file && (e.key === 'Enter' || e.key === ' ')) browse();
+      }}
     >
-      <div className="mk-drop-box" style={{ background: bg }}>
-        <svg className="mk-drop-svg" aria-hidden>
-          <rect
-            x="0.75"
-            y="0.75"
-            rx="6"
-            fill="none"
-            stroke={border}
-            strokeWidth="1.5"
-            strokeDasharray="6 3"
-            className={marching ? 'mk-ants' : undefined}
-            style={{ width: 'calc(100% - 1.5px)', height: 'calc(100% - 1.5px)', opacity: file || dragOver ? 1 : hover ? 0.8 : 0.63 }}
-          />
-        </svg>
-        {file ? <Loaded file={file} size={size} /> : dragOver ? <DragOver /> : <Idle hover={hover} />}
-      </div>
+      {file ? <Loaded file={file} size={size} name={name} onClear={onClear} onReplace={browse} /> : dragOver ? <DragOver /> : <Idle />}
       <input
         ref={inputRef}
         type="file"
@@ -169,66 +137,88 @@ export default function FileDropZone({ file, size, onPick, onClear }: Props) {
   );
 }
 
-function Idle({ hover }: { hover: boolean }) {
-  const col = hover ? 'var(--mk-pri)' : 'var(--mk-pri-dim)';
+function Idle() {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-      <svg width="30" height="20" viewBox="-15 -15 30 20" aria-hidden>
-        <g stroke={col} strokeWidth="2" fill="none" strokeLinecap="round">
-          <line x1="0" y1="-14" x2="0" y2="4" />
-          <line x1="-8" y1="-6" x2="0" y2="-14" />
-          <line x1="8" y1="-6" x2="0" y2="-14" />
-          <line x1="-14" y1="4" x2="14" y2="4" />
-        </g>
-      </svg>
-      <span style={{ fontSize: 'var(--mk-f8)', color: hover ? 'var(--mk-text)' : 'var(--mk-pri-dim)', whiteSpace: 'pre' }}>
-        {'Drop file here  or  Click to Browse'}
+    <>
+      <span className="mk-drop-ico">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M12 16V4M7 9l5-5 5 5" />
+          <path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
+        </svg>
       </span>
-      <span style={{ fontSize: 'var(--mk-f7)', color: '#1a4a5a' }}>Images · Video · Audio · PDF · Docs · Code · Data</span>
-    </div>
+      <span className="mk-drop-text">
+        <b>Drop a file</b> or click to browse
+        <small>Images, PDFs, documents, code, data, audio, video</small>
+      </span>
+    </>
   );
 }
 
 function DragOver() {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, color: 'var(--mk-pri)' }}>
-      <span style={{ fontSize: 26, lineHeight: 1 }}>⬇</span>
-      <span style={{ fontSize: 'var(--mk-f8)', fontWeight: 'bold' }}>Release to load</span>
-    </div>
+    <>
+      <span className="mk-drop-ico">⬇</span>
+      <span className="mk-drop-text">
+        <b>Release to load</b>
+      </span>
+    </>
   );
 }
 
-function Loaded({ file, size }: { file: string; size: number | null }) {
-  const { name, parent, ext } = splitPath(file);
-  const [icon, iconCol] = fileIcon(file);
-  const shownName = name.length <= 34 ? name : `${name.slice(0, 31)}...`;
-  const shownParent = parent.length > 42 ? `…${parent.slice(-41)}` : parent;
-  const meta = [ext.toUpperCase() || 'FILE', size != null ? fmtSize(size) : null].filter(Boolean).join('  ·  ');
+function Loaded({
+  file,
+  size,
+  name,
+  onClear,
+  onReplace,
+}: {
+  file: string;
+  size: number | null;
+  name: string;
+  onClear(): void;
+  onReplace(): void;
+}) {
+  const { name: fname, ext } = splitPath(file);
+  const [icon] = fileIcon(file);
+  const meta = [ext.toUpperCase() || 'FILE', size != null ? fmtSize(size) : null].filter(Boolean).join(' · ');
   return (
-    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center' }}>
-      <span
-        style={{
-          width: 60,
-          marginLeft: 4,
-          textAlign: 'center',
-          fontSize: 29,
-          color: iconCol,
-          fontFamily: "'Segoe UI Emoji', 'Apple Color Emoji', sans-serif",
-        }}
-      >
+    <>
+      <span className="mk-drop-ico file" style={{ fontFamily: "'Segoe UI Emoji', 'Apple Color Emoji', sans-serif" }}>
         {icon}
       </span>
-      <div style={{ flex: 1, minWidth: 0, marginLeft: 6, display: 'flex', flexDirection: 'column', gap: 3, overflow: 'hidden' }}>
-        <span style={{ fontSize: 'var(--mk-f8)', fontWeight: 'bold', color: 'var(--mk-white)', whiteSpace: 'nowrap' }}>{shownName}</span>
-        <span style={{ fontSize: 'var(--mk-f7)', color: 'var(--mk-text-dim)', whiteSpace: 'pre' }}>{meta}</span>
-        <span style={{ fontSize: 'var(--mk-f6)', color: '#1e5c6a', whiteSpace: 'nowrap' }}>{shownParent}</span>
-      </div>
-      <span
-        title="Clear"
-        style={{ width: 28, marginRight: 0, textAlign: 'center', fontSize: 'var(--mk-f9)', fontWeight: 'bold', color: 'rgba(255, 51, 85, 0.7)' }}
-      >
-        ✕
+      <span className="mk-drop-text" title={file}>
+        <b className="mk-ellipsis">{fname}</b>
+        <small>
+          {meta} · ask {name} what to do with it
+        </small>
       </span>
-    </div>
+      <button
+        className="btn ghost icon sm"
+        onClick={(e) => {
+          e.stopPropagation();
+          onReplace();
+        }}
+        title="Choose another file"
+        aria-label="Choose another file"
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" aria-hidden>
+          <path d="M4 4v6h6M20 20v-6h-6" />
+          <path d="M20 10a8 8 0 0 0-14.3-4.3L4 8M4 14a8 8 0 0 0 14.3 4.3L20 16" />
+        </svg>
+      </button>
+      <button
+        className="btn ghost icon sm danger"
+        onClick={(e) => {
+          e.stopPropagation();
+          onClear();
+        }}
+        title="Remove"
+        aria-label="Remove file"
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+          <path d="M6 6l12 12M18 6 6 18" />
+        </svg>
+      </button>
+    </>
   );
 }

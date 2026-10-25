@@ -5,10 +5,10 @@ import { useMarkStore } from '@/lib/mark/store';
 
 // The four quick actions and the exact command text Mark sends for each.
 const ACTIONS: [string, string][] = [
-  ['TRANSLATE', 'Translate this text to English: {text}'],
-  ['SUMMARISE', 'Summarise this: {text}'],
-  ['EXPLAIN', 'Explain this: {text}'],
-  ['FIX', 'Fix grammar and spelling: {text}'],
+  ['Translate', 'Translate this text to English: {text}'],
+  ['Summarise', 'Summarise this: {text}'],
+  ['Explain', 'Explain this: {text}'],
+  ['Fix', 'Fix grammar and spelling: {text}'],
 ];
 
 /** Mark only offers help for a copy of at least this many characters. */
@@ -42,17 +42,19 @@ export default function ClipboardPanel() {
   };
 
   return (
-    <div className="mk-clip">
+    <div className="mk-clip glass-strong">
       <div className="mk-clip-hdr">
-        <span>◈  CLIPBOARD DETECTED</span>
-        <button className="mk-x" onClick={dismiss} aria-label="Close">
-          ✕
+        <span className="label-caps">You copied</span>
+        <button className="btn ghost icon sm" onClick={dismiss} aria-label="Close">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+            <path d="M6 6l12 12M18 6 6 18" />
+          </svg>
         </button>
       </div>
-      <div className="mk-clip-preview">&quot;{preview}&quot;</div>
+      <div className="mk-clip-preview">“{preview}”</div>
       <div className="mk-clip-btns">
         {ACTIONS.map(([label, fmt]) => (
-          <button key={label} onClick={() => trigger(fmt)}>
+          <button key={label} className="btn sm" onClick={() => trigger(fmt)}>
             {label}
           </button>
         ))}

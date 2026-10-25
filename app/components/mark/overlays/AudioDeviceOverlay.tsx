@@ -14,7 +14,8 @@
 
 import { useEffect, useState } from 'react';
 import { useMarkStore } from '@/lib/mark/store';
-import { Gap, Lbl, Panel, Sep } from './common';
+import { HeadphonesIcon } from '../../Icons';
+import { Field, Group, Modal, Select, displayName } from './common';
 
 const DEFAULT_LABEL = 'System default';
 const PSEUDO_IDS = new Set(['default', 'communications']);
@@ -54,26 +55,19 @@ async function listDevices(): Promise<Lists> {
 
 function DeviceRow(props: {
   label: string;
+  hint: string;
   names: string[] | null;
   value: string;
   saved: string;
   onChange(v: string): void;
 }) {
-  const { label, names, value, saved, onChange } = props;
+  const { label, hint, names, value, saved, onChange } = props;
   // The saved device is not plugged in right now: show it rather than
   // silently resetting the user's choice to default.
   const missing = !!saved && !!names && !names.includes(saved);
   return (
-    <>
-      <Lbl pt={8} color="var(--o-text-dim)">
-        {label}
-      </Lbl>
-      <select
-        className="mko-input"
-        value={value}
-        disabled={!names}
-        onChange={(e) => onChange(e.target.value)}
-      >
+    <Field label={label} hint={hint}>
+      <Select value={value} disabled={!names} onChange={(e) => onChange(e.target.value)}>
         <option value="">{names ? DEFAULT_LABEL : 'Scanning…'}</option>
         {(names || []).map((n) => (
           <option key={n} value={n}>
@@ -81,8 +75,8 @@ function DeviceRow(props: {
           </option>
         ))}
         {missing && <option value={saved}>{`${saved}  (not connected)`}</option>}
-      </select>
-    </>
+      </Select>
+    </Field>
   );
 }
 
@@ -123,46 +117,46 @@ export default function AudioDeviceOverlay() {
     st.writeLog('SYS: Audio devices updated.');
   };
 
+  const close = () => useMarkStore.getState().setOverlay(null);
+  const who = displayName(name);
+
   return (
-    <Panel width={460} margins={[20, 16]} spacing={6}>
-      <Lbl pt={12} bold>
-        🎧  AUDIO DEVICES
-      </Lbl>
-      <Sep />
-
-      <DeviceRow
-        label={`MICROPHONE — what ${name} hears you with`}
-        names={lists?.input ?? null}
-        value={inName}
-        saved={savedIn}
-        onChange={setInName}
-      />
-      <Gap h={4} />
-      <DeviceRow
-        label={`SPEAKERS — what ${name} talks through`}
-        names={lists?.output ?? null}
-        value={outName}
-        saved={savedOut}
-        onChange={setOutName}
-      />
-
-      <Gap h={6} />
-      <Lbl pt={7} color="var(--o-text-dim)">
-        Applying reconnects the session. Your conversation is kept.
-      </Lbl>
-
-      <div className="mko-row" style={{ flex: 'none' }}>
-        <button className="mko-btn mko-btn-pri" style={{ height: 32 }} onClick={apply}>
-          ▸  APPLY
-        </button>
-        <button
-          className="mko-btn mko-btn-sec"
-          style={{ height: 32 }}
-          onClick={() => useMarkStore.getState().setOverlay(null)}
-        >
-          CLOSE
-        </button>
-      </div>
-    </Panel>
+    <Modal
+      width={460}
+      icon={<HeadphonesIcon />}
+      title="Audio devices"
+      description={`Which microphone ${who} listens to and which speakers it talks through.`}
+      onClose={close}
+      footerNote="Applying reconnects the session. Your conversation is kept."
+      footer={
+        <>
+          <button className="btn" onClick={close}>
+            Close
+          </button>
+          <button className="btn primary" onClick={apply}>
+            Apply
+          </button>
+        </>
+      }
+    >
+      <Group>
+        <DeviceRow
+          label="Microphone"
+          hint={`What ${who} hears you with`}
+          names={lists?.input ?? null}
+          value={inName}
+          saved={savedIn}
+          onChange={setInName}
+        />
+        <DeviceRow
+          label="Speakers"
+          hint={`What ${who} talks through`}
+          names={lists?.output ?? null}
+          value={outName}
+          saved={savedOut}
+          onChange={setOutName}
+        />
+      </Group>
+    </Modal>
   );
 }

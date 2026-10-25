@@ -10,7 +10,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { applyAccent, useMarkStore } from '@/lib/mark/store';
-import { Gap, Lbl, Panel, Sep, errText } from './common';
+import { PaletteIcon } from '../../Icons';
+import { Field, Group, Modal, errText } from './common';
 import HueWheel, { hexToHue } from './HueWheel';
 
 const DEFAULT_UI_COLOR = '#00d4ff';
@@ -112,103 +113,98 @@ export default function CustomizeOverlay() {
   };
 
   return (
-    <Panel width={400} height={588} margins={[24, 18]} spacing={8}>
-      <Lbl pt={12} bold align="center">
-        ⚙  CUSTOMISE ASSISTANT
-      </Lbl>
-      <Sep />
-
-      <Lbl pt={8} color="var(--o-text-dim)">
-        ASSISTANT NAME
-      </Lbl>
-      <input
-        className="mko-input"
-        value={name}
-        spellCheck={false}
-        onChange={(e) => setName(e.target.value)}
-        style={{ flex: 'none' }}
-      />
-
-      <Gap h={4} />
-      <Lbl pt={8} color="var(--o-text-dim)">
-        YOUR NAME  (leave blank for default sir / efendim)
-      </Lbl>
-      <input
-        className="mko-input"
-        value={user}
-        placeholder="e.g.  Tony   (leave blank for auto)"
-        spellCheck={false}
-        onChange={(e) => setUser(e.target.value)}
-        style={{ flex: 'none' }}
-      />
-
-      <Gap h={4} />
-      <Lbl pt={8} color="var(--o-text-dim)">
-        ASSISTANT VOICE
-      </Lbl>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, flex: 'none' }}>
-        {voices.map((v) => (
-          <button
-            key={v}
-            className={`mko-voice${v === voice ? ' sel' : ''}`}
-            aria-pressed={v === voice}
-            onClick={() => setVoiceSel(v)}
-          >
-            {v}
+    <Modal
+      width={440}
+      icon={<PaletteIcon />}
+      title="Customise assistant"
+      description="Its name, what it calls you, its voice and colour."
+      onClose={cancel}
+      footer={
+        <>
+          <button className="btn" onClick={cancel}>
+            Cancel
           </button>
-        ))}
-      </div>
+          <button className="btn primary" onClick={save}>
+            Apply changes
+          </button>
+        </>
+      }
+    >
+      <Group title="Identity">
+        <Field label="Assistant name">
+          <input className="field" value={name} spellCheck={false} onChange={(e) => setName(e.target.value)} />
+        </Field>
+        <Field label="Your name" hint="Leave blank for the default — sir / efendim.">
+          <input
+            className="field"
+            value={user}
+            placeholder="e.g. Tony"
+            spellCheck={false}
+            onChange={(e) => setUser(e.target.value)}
+          />
+        </Field>
+      </Group>
 
-      <Gap h={4} />
-      <div style={{ display: 'flex', alignItems: 'center', flex: 'none' }}>
-        <Lbl pt={8} color="var(--o-text-dim)" style={{ flex: '1 1 auto' }}>
-          UI COLOUR  —  drag the handle
-        </Lbl>
-        <button className="mko-mini-btn" onClick={() => setColor(DEFAULT_UI_COLOR)}>
-          DEFAULT
-        </button>
-      </div>
+      <Group title="Voice">
+        <div className="mko-pills" role="radiogroup" aria-label="Assistant voice">
+          {voices.map((v) => (
+            <button
+              key={v}
+              className={`mko-pill${v === voice ? ' sel' : ''}`}
+              role="radio"
+              aria-checked={v === voice}
+              onClick={() => setVoiceSel(v)}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+      </Group>
 
-      <div style={{ display: 'flex', justifyContent: 'center', flex: 'none' }}>
-        <HueWheel
-          hue={hue}
-          onPick={(hx, h) => {
-            // While dragging: hex box only, the theme waits for release.
-            setHue(h);
-            selRef.current = hx;
-            setColorState(hx);
-            setHexText(hx);
-          }}
-          onCommit={(hx) => setColor(hx, false)}
-        />
-      </div>
-
-      <input
-        className="mko-input"
-        value={hexText}
-        placeholder="#00d4ff   (custom hex colour)"
-        spellCheck={false}
-        style={{ height: 28, flex: 'none' }}
-        onChange={(e) => {
-          const text = e.target.value;
-          setHexText(text);
-          const t = text.trim().toLowerCase();
-          if (/^#[0-9a-f]{6}$/.test(t)) {
-            setColor(t, true, true);
-            setHexText(text);
-          }
-        }}
-      />
-
-      <Gap h={6} />
-      <div className="mko-row" style={{ flex: 'none' }}>
-        <button className="mko-btn mko-btn-pri" onClick={save}>
-          ▸  APPLY CHANGES
-        </button>
-        <button className="mko-btn mko-btn-sec" style={{ fontWeight: 'normal' }} onClick={cancel}>
-          CANCEL
-        </button>
-      </div>
-    </Panel>
+      <Group
+        title="Colour"
+        aside={
+          <button className="btn ghost sm mko-mini" onClick={() => setColor(DEFAULT_UI_COLOR)}>
+            Reset to default
+          </button>
+        }
+      >
+        <div className="mko-color">
+          <HueWheel
+            hue={hue}
+            onPick={(hx, h) => {
+              // While dragging: hex box only, the theme waits for release.
+              setHue(h);
+              selRef.current = hx;
+              setColorState(hx);
+              setHexText(hx);
+            }}
+            onCommit={(hx) => setColor(hx, false)}
+          />
+          <div className="mko-color-side">
+            <Field label="Hex" hint="Drag the handle round the ring, or type a colour.">
+              <span className="mko-swatch-row">
+                <span className="mko-swatch" style={{ background: color, color }} aria-hidden />
+                <input
+                  className="field mono"
+                  value={hexText}
+                  placeholder="#00d4ff"
+                  spellCheck={false}
+                  onChange={(e) => {
+                    const text = e.target.value;
+                    setHexText(text);
+                    const t = text.trim().toLowerCase();
+                    if (/^#[0-9a-f]{6}$/.test(t)) {
+                      setColor(t, true, true);
+                      setHexText(text);
+                    }
+                  }}
+                />
+              </span>
+            </Field>
+          </div>
+        </div>
+      </Group>
+    </Modal>
   );
 }

@@ -3,6 +3,7 @@
 import { useJarvisStore } from '@/lib/store';
 import ProgressRing from './ProgressRing';
 import { PowerIcon, SystemIcon } from './Icons';
+import './views.css';
 import { useEffect, useState } from 'react';
 
 export default function SystemView() {
@@ -20,33 +21,61 @@ export default function SystemView() {
   }, []);
 
   return (
-    <div className="flex-1 overflow-y-auto p-5">
-      <h2 className="text-[15px] font-semibold mb-1 flex items-center gap-2">
-        <SystemIcon width={18} height={18} /> System Control
-      </h2>
-      <p className="text-sm mb-4" style={{ color: 'var(--jarvis-subtext)' }}>
-        Live resource usage and power actions. Destructive actions always ask for confirmation.
-      </p>
+    <div className="v-page">
+      <div className="v-page-inner narrow">
+        <header className="v-head">
+          <div>
+            <h1>System control</h1>
+            <p className="sub">Live resource usage and power actions. Destructive actions always ask for confirmation.</p>
+          </div>
+        </header>
 
-      <div className="glass-panel rounded-lg p-4 flex items-center justify-around mb-4">
-        <ProgressRing percent={stats.cpu} color="var(--jarvis-success)" label="CPU" sublabel="Normal" />
-        <ProgressRing percent={stats.ram} color="var(--jarvis-accent)" label="RAM" sublabel="Normal" />
-        <ProgressRing percent={stats.disk} color="var(--jarvis-purple)" label="DISK" sublabel="Normal" />
-      </div>
+        <section className="glass v-card">
+          <div className="v-card-head">
+            <h2 className="v-card-title">
+              <SystemIcon width={16} height={16} /> Resources
+            </h2>
+          </div>
+          <div className="v-rings" style={{ padding: '6px 0 2px' }}>
+            <ProgressRing percent={stats.cpu} color="var(--good)" label="CPU" sublabel="Normal" />
+            <ProgressRing percent={stats.ram} color="var(--accent)" label="RAM" sublabel="Normal" />
+            <ProgressRing percent={stats.disk} color="var(--think)" label="Disk" sublabel="Normal" />
+          </div>
+        </section>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <button onClick={() => sendMessage('shutdown pc')} className="glass-panel rounded-lg p-3.5 flex flex-col items-center gap-2 hover:brightness-110 active:scale-[0.97]">
-          <PowerIcon width={22} height={22} style={{ color: 'var(--jarvis-danger)' }} />
-          <span className="text-sm font-medium">Shutdown</span>
-        </button>
-        <button onClick={() => sendMessage('restart pc')} className="glass-panel rounded-lg p-3.5 flex flex-col items-center gap-2 hover:brightness-110 active:scale-[0.97]">
-          <PowerIcon width={22} height={22} style={{ color: 'var(--jarvis-accent)' }} />
-          <span className="text-sm font-medium">Restart</span>
-        </button>
-        <button onClick={() => sendMessage('lock pc')} className="glass-panel rounded-lg p-3.5 flex flex-col items-center gap-2 hover:brightness-110 active:scale-[0.97]">
-          <PowerIcon width={22} height={22} style={{ color: 'var(--jarvis-purple)' }} />
-          <span className="text-sm font-medium">Lock</span>
-        </button>
+        <section className="glass v-card">
+          <div className="v-card-head">
+            <h2 className="v-card-title">
+              <PowerIcon width={16} height={16} /> Power
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <button onClick={() => sendMessage('shutdown pc')} className="v-tile col">
+              <span className="v-tile-ico bad">
+                <PowerIcon width={18} height={18} />
+              </span>
+              <span className="v-tile-text">
+                <b>Shutdown</b>
+              </span>
+            </button>
+            <button onClick={() => sendMessage('restart pc')} className="v-tile col">
+              <span className="v-tile-ico">
+                <PowerIcon width={18} height={18} />
+              </span>
+              <span className="v-tile-text">
+                <b>Restart</b>
+              </span>
+            </button>
+            <button onClick={() => sendMessage('lock pc')} className="v-tile col">
+              <span className="v-tile-ico think">
+                <PowerIcon width={18} height={18} />
+              </span>
+              <span className="v-tile-text">
+                <b>Lock</b>
+              </span>
+            </button>
+          </div>
+        </section>
       </div>
     </div>
   );

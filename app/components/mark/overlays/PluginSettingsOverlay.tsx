@@ -15,7 +15,8 @@ import {
   type PluginSettingsField,
   type PluginSettingsSection,
 } from '@/lib/mark/types';
-import { Gap, Lbl, Panel, Sep, errText } from './common';
+import { SettingsIcon } from '../../Icons';
+import { Field, Group, Modal, Select, errText } from './common';
 
 type Kind = 'choice' | 'toggle' | 'password' | 'number' | 'text';
 type Status = { text: string; color: string };
@@ -103,9 +104,9 @@ export default function PluginSettingsOverlay() {
       if (!ns) continue;
       try {
         await saveNs(ns);
-        setStatus((s) => ({ ...s, [ns]: { text: 'Saved ✓', color: 'var(--o-pri)' } }));
+        setStatus((s) => ({ ...s, [ns]: { text: 'Saved ✓', color: 'var(--good)' } }));
       } catch (e) {
-        setStatus((s) => ({ ...s, [ns]: { text: errText(e), color: '#ff6b6b' } }));
+        setStatus((s) => ({ ...s, [ns]: { text: errText(e), color: 'var(--bad)' } }));
       }
     }
   };
@@ -113,7 +114,7 @@ export default function PluginSettingsOverlay() {
   const runAction = async (ns: string) => {
     const bridge = markBridge();
     if (!bridge) return;
-    setStatus((s) => ({ ...s, [ns]: { text: 'Testing…', color: 'var(--o-text-dim)' } }));
+    setStatus((s) => ({ ...s, [ns]: { text: 'Testing…', color: 'var(--ink-3)' } }));
     let ok = false;
     let msg = '';
     try {
@@ -130,7 +131,7 @@ export default function PluginSettingsOverlay() {
       ok = false;
       msg = errText(e);
     }
-    setStatus((s) => ({ ...s, [ns]: { text: msg, color: ok ? 'var(--o-pri)' : '#ff6b6b' } }));
+    setStatus((s) => ({ ...s, [ns]: { text: msg, color: ok ? 'var(--good)' : 'var(--bad)' } }));
   };
 
   const set = (k: string, v: string | boolean) => setValues((s) => ({ ...s, [k]: v }));
@@ -139,127 +140,119 @@ export default function PluginSettingsOverlay() {
     const k = fk(ns, f.key);
     const kind = kindOf(f);
     const v = values[k];
-    if (kind === 'choice') {
-      return (
-        <select className="mko-input" value={String(v ?? '')} onChange={(e) => set(k, e.target.value)}>
-          {(f.options || []).map((o) => (
-            <option key={String(o)} value={String(o)}>
-              {String(o)}
-            </option>
-          ))}
-        </select>
-      );
-    }
+    const label = String(f.label || f.key);
     if (kind === 'toggle') {
       const on = !!v;
       return (
         <button
-          className={`mko-toggle${on ? ' on-pri' : ''}`}
-          style={{ height: 28, fontSize: '10.5px', color: on ? undefined : 'var(--o-text-med)' }}
-          aria-pressed={on}
+          key={f.key}
+          className="mko-toggle-row"
+          role="switch"
+          aria-checked={on}
           onClick={() => set(k, !on)}
         >
-          {on ? 'ON' : 'OFF'}
+          <span className="mko-toggle-text">
+            <span className="mko-label">{label}</span>
+            {f.help && <span className="mko-hint">{f.help}</span>}
+          </span>
+          <span className={`switch${on ? ' on' : ''}`} />
         </button>
       );
     }
     return (
-      <input
-        className="mko-input"
-        style={{ height: 30 }}
-        type={kind === 'password' ? 'password' : 'text'}
-        inputMode={kind === 'number' ? 'decimal' : undefined}
-        placeholder={f.placeholder ? String(f.placeholder) : undefined}
-        value={String(v ?? '')}
-        spellCheck={false}
-        onChange={(e) => set(k, e.target.value)}
-      />
+      <Field key={f.key} label={label} hint={f.help || undefined}>
+        {kind === 'choice' ? (
+          <Select value={String(v ?? '')} onChange={(e) => set(k, e.target.value)}>
+            {(f.options || []).map((o) => (
+              <option key={String(o)} value={String(o)}>
+                {String(o)}
+              </option>
+            ))}
+          </Select>
+        ) : (
+          <input
+            className={`field${kind === 'password' ? ' mono' : ''}`}
+            type={kind === 'password' ? 'password' : 'text'}
+            inputMode={kind === 'number' ? 'decimal' : undefined}
+            placeholder={f.placeholder ? String(f.placeholder) : undefined}
+            value={String(v ?? '')}
+            spellCheck={false}
+            onChange={(e) => set(k, e.target.value)}
+          />
+        )}
+      </Field>
     );
   };
 
   const has = !!sections && sections.length > 0;
+  const close = () => useMarkStore.getState().setOverlay(null);
 
   return (
-    <Panel width={460} height={560} margins={[22, 16]} spacing={8}>
-      <Lbl pt={12} bold>
-        ⚙  PLUGIN SETTINGS
-      </Lbl>
-      <Sep />
-
+    <Modal
+      width={480}
+      icon={<SettingsIcon />}
+      title="Plugin settings"
+      description="Tokens and connections for the plugins you have turned on."
+      onClose={close}
+      style={{ maxHeight: 'min(640px, 100%)' }}
+      footer={
+        <>
+          <button className="btn" onClick={close}>
+            Close
+          </button>
+          {has && (
+            <button className="btn primary" onClick={saveAll}>
+              Save
+            </button>
+          )}
+        </>
+      }
+    >
       {sections === null && (
-        <Lbl pt={9} color="var(--o-text-dim)">
-          Loading…
-        </Lbl>
-      )}
-      {sections !== null && !has && (
-        <Lbl pt={9} color="var(--o-text-dim)">
-          {'No configurable plugins are installed.\nDrop a plugin that needs settings (like the ' +
-            '3D-printer suite) into the plugins folder and it will show up here.'}
-        </Lbl>
-      )}
-
-      {has && (
-        <div
-          className="mko-body"
-          style={{ flex: '1 1 auto', gap: 6, paddingRight: 6, minHeight: 0 }}
-        >
-          {sections!.map((sec) => {
-            const ns = nsOf(sec);
-            const st = status[ns];
-            return (
-              <div key={ns} style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 'none' }}>
-                <Gap h={4} />
-                <Lbl pt={10} bold>
-                  {sec.title || ns}
-                </Lbl>
-                {(sec.fields || [])
-                  .filter((f) => f && typeof f === 'object' && f.key)
-                  .map((f) => (
-                    <div key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <Lbl pt={8} color="var(--o-text-dim)">
-                        {String(f.label || f.key).toUpperCase()}
-                      </Lbl>
-                      {renderField(ns, f)}
-                      {f.help && (
-                        <Lbl pt={7} color="var(--o-text-dim)">
-                          {f.help}
-                        </Lbl>
-                      )}
-                    </div>
-                  ))}
-                {sec.action && (
-                  <>
-                    <Gap h={2} />
-                    <button
-                      className="mko-btn mko-btn-pri"
-                      style={{ height: 30, fontSize: '10.5px', background: '#00091a' }}
-                      onClick={() => runAction(ns)}
-                    >
-                      {String(sec.action.label || 'TEST')}
-                    </button>
-                  </>
-                )}
-                <Lbl pt={8} color={st?.color || 'var(--o-text-dim)'} style={{ minHeight: 14 }}>
-                  {st?.text || ''}
-                </Lbl>
-                <Sep margin={4} />
-              </div>
-            );
-          })}
+        <div className="mko-well">
+          <div className="mko-empty">Loading…</div>
         </div>
       )}
-      {!has && <div style={{ flex: '1 1 auto' }} />}
+      {sections !== null && !has && (
+        <div className="mko-well">
+          <div className="mko-empty">
+            <span className="mko-empty-ico">
+              <SettingsIcon />
+            </span>
+            <b>No configurable plugins are installed</b>
+            <span style={{ maxWidth: '38ch' }}>
+              Drop a plugin that needs settings (like the 3D-printer suite) into the plugins folder and it will show
+              up here.
+            </span>
+          </div>
+        </div>
+      )}
 
-      <div className="mko-row" style={{ flex: 'none' }}>
-        {has && (
-          <button className="mko-btn mko-btn-pri" onClick={saveAll}>
-            ▸  SAVE
-          </button>
-        )}
-        <button className="mko-btn mko-btn-sec" onClick={() => useMarkStore.getState().setOverlay(null)}>
-          CLOSE
-        </button>
-      </div>
-    </Panel>
+      {has &&
+        sections!.map((sec) => {
+          const ns = nsOf(sec);
+          const st = status[ns];
+          return (
+            <Group
+              key={ns}
+              title={sec.title || ns}
+              aside={
+                sec.action ? (
+                  <button className="btn sm mko-mini mko-test" onClick={() => runAction(ns)}>
+                    {String(sec.action.label || 'Test')}
+                  </button>
+                ) : undefined
+              }
+            >
+              {(sec.fields || []).filter((f) => f && typeof f === 'object' && f.key).map((f) => renderField(ns, f))}
+              {st?.text && (
+                <div className="mko-status" style={{ color: st.color }}>
+                  {st.text}
+                </div>
+              )}
+            </Group>
+          );
+        })}
+    </Modal>
   );
 }

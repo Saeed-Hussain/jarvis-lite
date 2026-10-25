@@ -6,38 +6,36 @@
 // the main process withdraws it (confirm-hide) when its 90 s timeout lapses.
 
 import { useMarkStore } from '@/lib/mark/store';
-import { Lbl, Panel } from './common';
+import { ShieldIcon } from '../../Icons';
 
 export default function ConfirmBanner(props: { title: string; detail: string }) {
   const { title, detail } = props;
   const answer = (ok: boolean) => useMarkStore.getState().answerConfirm(ok);
   return (
-    <Panel width={430} margins={[20, 16]} spacing={8} className="mko-confirm">
-      <Lbl pt={11} bold color="var(--o-acc)">
-        ⚠  CONFIRM
-      </Lbl>
-      <Lbl pt={10} bold color="var(--o-text)" style={{ overflowWrap: 'anywhere' }}>
-        {title}
-      </Lbl>
-      {detail && (
-        <Lbl pt={8} color="var(--o-text-med)" style={{ overflowWrap: 'anywhere' }}>
-          {detail}
-        </Lbl>
-      )}
-      <div className="mko-row" style={{ flex: 'none' }}>
-        <button className="mko-btn mko-btn-acc" onClick={() => answer(true)}>
-          ▸  CONFIRM
-        </button>
-        {/* Default focus on CANCEL: Enter without reading picks the safe answer. */}
-        <button
-          className="mko-btn mko-btn-sec"
-          style={{ height: 32 }}
-          autoFocus
-          onClick={() => answer(false)}
-        >
-          CANCEL
-        </button>
+    <div className="mko-confirm glass-strong" role="alertdialog" aria-labelledby="mko-confirm-t" aria-describedby="mko-confirm-d">
+      <span className="mko-confirm-ico">
+        <ShieldIcon />
+      </span>
+      <div className="mko-confirm-main">
+        <span className="mko-confirm-eyebrow">Needs your confirmation</span>
+        <h2 className="mko-confirm-title" id="mko-confirm-t">
+          {title}
+        </h2>
+        {detail && (
+          <p className="mko-confirm-detail" id="mko-confirm-d">
+            {detail}
+          </p>
+        )}
+        <div className="mko-confirm-btns">
+          {/* Default focus on Cancel: Enter without reading picks the safe answer. */}
+          <button className="btn" autoFocus onClick={() => answer(false)}>
+            Cancel
+          </button>
+          <button className="btn danger mko-danger" onClick={() => answer(true)}>
+            Confirm
+          </button>
+        </div>
       </div>
-    </Panel>
+    </div>
   );
 }

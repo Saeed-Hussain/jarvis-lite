@@ -17,6 +17,7 @@ import MemoryView from './components/MemoryView';
 import PilotView from './components/PilotView';
 import StatusBar from './components/StatusBar';
 import MarkHud from './components/mark/MarkHud';
+import Backdrop from './components/Backdrop';
 import { useJarvisStore } from '@/lib/store';
 import { useMarkStore } from '@/lib/mark/store';
 import { startMarkLive } from '@/lib/mark/live';
@@ -44,64 +45,63 @@ export default function Home() {
 
   if (!hydrated) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center" style={{ backgroundColor: 'var(--jarvis-bg)', color: 'var(--jarvis-text)' }}>
-        <p className="text-sm" style={{ color: 'var(--jarvis-subtext)' }}>
-          Waking up Jarvis...
-        </p>
-      </div>
+      <>
+        <Backdrop />
+        <div className="relative z-[1] h-screen w-screen flex items-center justify-center">
+          <p className="text-sm" style={{ color: 'var(--ink-3)' }}>
+            Waking up Jarvis…
+          </p>
+        </div>
+      </>
     );
   }
 
-  const showFullDashboard = view === 'dashboard' || view === 'chat';
-
   return (
-    <div className="h-screen w-screen flex flex-col" style={{ backgroundColor: 'var(--jarvis-bg)', color: 'var(--jarvis-text)' }}>
-      <div className="flex-1 flex min-h-0">
+    <>
+      <Backdrop />
+      <div className="app-shell">
         <Sidebar active={view} onSelect={setView} />
 
-        {/* Mark's window is full-bleed: no TopBar / StatusBar chrome around it. */}
-        {view === 'hud' && (
-          <main className="flex-1 flex min-w-0 min-h-0">
-            <MarkHud />
-          </main>
-        )}
+        <main className="app-main">
+          {/* The assistant brings its own header (it doubles as the title bar). */}
+          {view === 'hud' && <MarkHud />}
 
-        {view !== 'hud' && (
-        <main className="flex-1 flex flex-col min-w-0">
-          <TopBar />
+          {view !== 'hud' && (
+            <div key={view} className="page-in flex-1 flex flex-col min-h-0">
+              <TopBar />
+              <div className="flex-1 flex min-h-0">
+                {view === 'dashboard' && (
+                  <>
+                    <section className="flex-1 flex flex-col min-w-0">
+                      <Chat />
+                      <InputBar />
+                    </section>
+                    <StatusPanel onSelect={setView} />
+                  </>
+                )}
 
-          <div className="flex-1 flex min-h-0">
-            {view === 'dashboard' && (
-              <>
-                <section className="flex-1 flex flex-col min-w-0">
-                  <Chat />
-                  <InputBar />
-                </section>
-                <StatusPanel onSelect={setView} />
-              </>
-            )}
+                {view === 'chat' && (
+                  <section className="flex-1 flex flex-col min-w-0">
+                    <Chat />
+                    <InputBar />
+                  </section>
+                )}
 
-            {view === 'chat' && (
-              <section className="flex-1 flex flex-col min-w-0">
-                <Chat />
-                <InputBar />
-              </section>
-            )}
-
-            {view === 'pilot' && <PilotView />}
-            {view === 'commands' && <CommandsView />}
-            {view === 'system' && <SystemView />}
-            {view === 'files' && <FilesView />}
-            {view === 'apps' && <AppsView />}
-            {view === 'settings' && <SettingsView />}
-            {view === 'memory' && <MemoryView />}
-            {view === 'logs' && <LogsView />}
-            {view === 'about' && <AboutView />}
-          </div>
+                {view === 'pilot' && <PilotView />}
+                {view === 'commands' && <CommandsView />}
+                {view === 'system' && <SystemView />}
+                {view === 'files' && <FilesView />}
+                {view === 'apps' && <AppsView />}
+                {view === 'settings' && <SettingsView />}
+                {view === 'memory' && <MemoryView />}
+                {view === 'logs' && <LogsView />}
+                {view === 'about' && <AboutView />}
+              </div>
+              <StatusBar onSelect={setView} />
+            </div>
+          )}
         </main>
-        )}
       </div>
-      {view !== 'hud' && <StatusBar onSelect={setView} />}
-    </div>
+    </>
   );
 }

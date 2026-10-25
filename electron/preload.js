@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('jarvis', {
 
   // Actions
   openApp: (appKey, options) => ipcRenderer.invoke('action:open-app', appKey, options),
+  closeApp: (appKey, options) => ipcRenderer.invoke('action:close-app', appKey, options),
   openUrl: (url) => ipcRenderer.invoke('action:open-url', url),
   openUrlInProfile: (url, browser, profile) =>
     ipcRenderer.invoke('action:open-url-profile', { url, browser, profile }),
@@ -30,6 +31,11 @@ contextBridge.exposeInMainWorld('jarvis', {
   close: () => ipcRenderer.invoke('window:close'),
   showWindow: () => ipcRenderer.invoke('window:show'),
   hideWindow: () => ipcRenderer.invoke('window:hide'),
+  onVisibility: (handler) => {
+    const listener = (_event, visible) => handler(visible);
+    ipcRenderer.on('window:visibility', listener);
+    return () => ipcRenderer.removeListener('window:visibility', listener);
+  },
 
   // Lets the renderer tell a real desktop session from a plain browser tab
   isElectron: true,

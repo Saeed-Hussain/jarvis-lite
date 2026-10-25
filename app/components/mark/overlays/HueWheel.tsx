@@ -93,24 +93,30 @@ export default function HueWheel(props: {
     // Centre preview circle (Mark: ring rect shrunk by 30 px each side).
     const style = getComputedStyle(cv);
     p.lineWidth = 1;
-    p.strokeStyle = style.getPropertyValue('--o-border-b').trim() || '#1a5c7a';
+    p.strokeStyle = style.getPropertyValue('--line-2').trim() || 'rgba(127, 127, 127, 0.25)';
     p.fillStyle = hueToHex(hue);
     p.beginPath();
     p.arc(c, c, r - 30, 0, Math.PI * 2);
     p.fill();
     p.stroke();
 
-    // Handle.
+    // Handle: a white knob with a soft shadow, like the switches.
     const ang = hue * Math.PI * 2;
     const hx = c + r * Math.cos(ang);
     const hy = c - r * Math.sin(ang);
-    p.lineWidth = 2;
-    p.strokeStyle = '#00060a';
+    p.save();
+    p.shadowColor = 'rgba(0, 0, 0, 0.35)';
+    p.shadowBlur = 6;
+    p.shadowOffsetY = 1;
     p.fillStyle = '#ffffff';
     p.beginPath();
-    p.arc(hx, hy, 7.5, 0, Math.PI * 2);
+    p.arc(hx, hy, 9, 0, Math.PI * 2);
     p.fill();
-    p.stroke();
+    p.restore();
+    p.fillStyle = hueToHex(hue);
+    p.beginPath();
+    p.arc(hx, hy, 5, 0, Math.PI * 2);
+    p.fill();
   }, [hue]);
 
   const hueAt = useCallback((e: React.PointerEvent) => {
