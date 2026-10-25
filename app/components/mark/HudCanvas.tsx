@@ -14,6 +14,7 @@ import { hud } from '@/lib/mark/hud';
 import { accentColor, useMarkStore } from '@/lib/mark/store';
 import { hudPalette } from '@/lib/mark/avatar/palette';
 import { HudRenderer, TICK_MS, type HudInputs } from '@/lib/mark/avatar/render';
+import { isVisible, onVisibility } from '@/lib/visibility';
 
 // After this long without a frame (window hidden, machine asleep) the step
 // clock is re-anchored instead of replaying the gap: the face resumes
@@ -33,7 +34,8 @@ export default function HudCanvas({ className, assistantName }: { className?: st
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d', { alpha: false });
+    // Transparent: the glass HUD lets the ambient field show around the face.
+    const ctx = canvas.getContext('2d', { alpha: true });
     if (!ctx) return;
 
     const renderer = new HudRenderer();
@@ -64,11 +66,17 @@ export default function HudCanvas({ className, assistantName }: { className?: st
       muted: useMarkStore.getState().muted,
       hudStyle: inputs.current.hudStyle,
       name: inputs.current.name,
+      glass: true,
     });
 
     const frame = (now: number) => {
+      // Hidden in the tray the loop stops outright rather than spinning on
+      // empty frames; onVisible starts it again.
+      if (!isVisible()) {
+        raf = 0;
+        return;
+      }
       raf = requestAnimationFrame(frame);
-      if (document.hidden) return;
       // Size changes arrive through the ResizeObserver; measuring the element
       // here forced a layout every frame. Only the display scale (dragging to
       // another monitor) needs checking, and reading it costs nothing.
@@ -101,7 +109,9 @@ export default function HudCanvas({ className, assistantName }: { className?: st
     };
 
     const onVisible = () => {
-      if (!document.hidden) dirty = true;
+      if (!isVisible()) return;
+      dirty = true;
+      if (!raf) raf = requestAnimationFrame(frame);
     };
 
     const ro = new ResizeObserver(() => {
@@ -109,6 +119,7 @@ export default function HudCanvas({ className, assistantName }: { className?: st
     });
     ro.observe(canvas);
     document.addEventListener('visibilitychange', onVisible);
+    const offVisibility = onVisibility(onVisible);
     stepAt = performance.now();
     raf = requestAnimationFrame(frame);
 
@@ -116,6 +127,7 @@ export default function HudCanvas({ className, assistantName }: { className?: st
       cancelAnimationFrame(raf);
       ro.disconnect();
       document.removeEventListener('visibilitychange', onVisible);
+      offVisibility();
     };
   }, []);
 

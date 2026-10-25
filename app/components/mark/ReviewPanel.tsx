@@ -39,11 +39,10 @@ export default function ReviewPanel({
   }, [at]);
 
   return (
-    <div className="mk-panel" style={{ height }}>
+    <div className="mk-panel glass" style={{ height }}>
       {/* Left as written, not upper-cased: this is the document's own name,
           and English casing rules mangle other languages (Turkish İ). */}
       <PanelHeader title={(title || 'Document').slice(0, 48)} right={hms(at)} onDismiss={onDismiss} />
-      <div className="mk-rule" />
       <div className="mk-panel-text" ref={bodyRef}>
         {summary && <div className="mk-rv-summary">{summary}</div>}
 

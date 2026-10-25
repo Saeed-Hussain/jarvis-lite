@@ -37,12 +37,16 @@ face, tools, memory, wake word, phone dashboard — and the build is clean.
 - "Hey Jarvis" scores 0.999 on a spoken test clip and 0.0001 on an ordinary
   sentence.
 - The phone dashboard passes 34 of 34 end-to-end checks.
-- Typecheck is clean and the original self-test still passes 40 of 40.
+- Typecheck is clean and the self-test passes 64 of 64, including every app and
+  site alias and the phrasings that used to misroute.
 
 It is light enough for a modest laptop. The face draws its surface in one pass
 rather than as ~1,800 separate canvas calls, which took its GPU cost from about
 23% to about 6%, and the gauges read from one long-lived sensor process instead
-of starting PowerShell every second.
+of starting PowerShell every second. Hidden in the tray it stops drawing
+altogether: the window runs unthrottled so the microphone keeps working, and
+until it was told it was hidden it went on animating at over a full core. The
+background field holds still unless you switch effects to full.
 
 The live conversation has had real use but not systematic testing: it connects,
 talks and calls tools, and the first real-world bug it surfaced (WhatsApp
@@ -209,7 +213,19 @@ hey jarvis, open chrome with profile saeed and search whatsapp web
   in downloads", "go up". Where you are carries between steps, so a sequence of
   spoken navigation behaves like a shell — `open d drive` then `go to projects`
   lands in `D:\projects`. A folder name that matches several places asks which
-  one rather than picking.
+  one rather than picking. On a one-drive machine, "the d drive" means a
+  folder called `D drive` at a drive root, if there is one.
+- **Apps, honestly.** "open X" checks the app is really there before starting
+  it — a registered URI scheme, an exe on PATH or in App Paths, or a Start-menu
+  entry (Store apps included) — and says so when it isn't, instead of reporting
+  "Opened" over a Windows error box. "close X" asks the app to close the way
+  its own close button would; "restart chrome" closes and reopens Chrome, not
+  the PC.
+- **Site searches.** "search lofi on youtube", "search github for react",
+  "play despacito on youtube" and "open amazon and search headphones" land on
+  that site's own results. Anything else is a Google search, and a sentence
+  that leads with "search" is always a search — "search how to lock files"
+  never locks the screen.
 - **Slot extraction.** Pulls browser profiles (`with profile saeed`), phone
   numbers, quoted message bodies (`saying "running late"`), and wait durations
   out of plain language.

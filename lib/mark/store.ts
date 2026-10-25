@@ -413,4 +413,51 @@ export function applyAccent(hex: string): void {
   const root = document.documentElement.style;
   root.setProperty('--mark-accent', hex);
   root.setProperty('--mark-accent-rgb', `${r}, ${g}, ${b}`);
+  root.setProperty('--accent', hex);
+  root.setProperty('--accent-rgb', `${r}, ${g}, ${b}`);
+
+  // The ambient field behind the glass is built from the accent: the accent
+  // itself plus three neighbours around the colour wheel, so a cyan assistant
+  // lives in a cool room and an orange one in a warm room. Dark mode uses
+  // deeper versions of the same hues (see .dark in globals.css for opacity).
+  const [h, s] = rgbToHsl(r, g, b);
+  const sat = Math.max(0.55, s);
+  const dark = document.documentElement.classList.contains('dark');
+  const l = dark ? 0.42 : 0.72;
+  // Neighbours only, never the complement: a complement lands on red or green
+  // for most accents and fights the glass. Cyan gives cyan / blue / violet /
+  // teal — the same family Cadence's field lives in.
+  const hues = [h, h + 45, h + 100, h - 30];
+  hues.forEach((hh, i) => root.setProperty(`--blob-${i + 1}`, hslHex(hh, sat, i === 0 ? l : l + (dark ? -0.06 : 0.04))));
+  // Readable accent text on the light theme.
+  root.setProperty('--accent-ink-light', hslHex(h, sat, 0.38));
+}
+
+function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
+  r /= 255;
+  g /= 255;
+  b /= 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  h *= 60;
+  return [h, s, l];
+}
+
+function hslHex(h: number, s: number, l: number): string {
+  h = ((h % 360) + 360) % 360;
+  const k = (n: number) => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n: number) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  const c = (x: number) => Math.round(x * 255).toString(16).padStart(2, '0');
+  return `#${c(f(0))}${c(f(8))}${c(f(4))}`;
+}
+
+/** Re-derive the field after a theme switch (the blobs differ per theme). */
+export function reapplyAccent(): void {
+  applyAccent(accent);
 }

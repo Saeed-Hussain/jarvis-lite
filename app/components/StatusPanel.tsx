@@ -3,9 +3,11 @@
 import { useEffect, useState } from 'react';
 import { useJarvisStore } from '@/lib/store';
 import ProgressRing from './ProgressRing';
-import { ChromeIcon, PlayIcon, CodeIcon, NoteIcon, ClockIcon, PowerIcon, LogsIcon } from './Icons';
+import { ChromeIcon, PlayIcon, CodeIcon, NoteIcon, ClockIcon, PowerIcon, LogsIcon, SystemIcon, SparkIcon } from './Icons';
 import { formatTime } from '@/lib/utils';
+import { isVisible } from '@/lib/visibility';
 import type { View } from './Sidebar';
+import './views.css';
 
 interface Stats {
   cpu: number;
@@ -31,6 +33,7 @@ export default function StatusPanel({ onSelect }: { onSelect: (v: View) => void 
     let cancelled = false;
 
     async function poll() {
+      if (!isVisible()) return;
       if (typeof window !== 'undefined' && window.jarvis?.isElectron) {
         try {
           const s = await window.jarvis.getStats();
@@ -61,38 +64,38 @@ export default function StatusPanel({ onSelect }: { onSelect: (v: View) => void 
   const recentLogs = memory.logs.slice(0, 5);
 
   return (
-    <aside className="w-[260px] shrink-0 h-full overflow-y-auto flex flex-col gap-3 p-3">
+    <aside className="v-side">
       {/* System status */}
-      <div className="glass-panel rounded-xl p-3.5">
-        <div className="flex items-center justify-between mb-2.5">
-          <h3 className="font-semibold text-[15px]">System Status</h3>
-          <span style={{ color: 'var(--jarvis-accent-2)' }}>
-            <ClockIcon width={16} height={16} />
-          </span>
+      <div className="glass v-card">
+        <div className="v-card-head">
+          <h3 className="v-card-title">
+            <SystemIcon width={16} height={16} /> System
+          </h3>
         </div>
-        <div className="flex items-center justify-between">
-          <ProgressRing percent={stats.cpu} color="var(--jarvis-success)" label="CPU" sublabel="Normal" />
-          <ProgressRing percent={stats.ram} color="var(--jarvis-accent)" label="RAM" sublabel="Normal" />
-          <ProgressRing percent={stats.disk} color="var(--jarvis-purple)" label="DISK" sublabel="Normal" />
+        <div className="v-rings">
+          <ProgressRing percent={stats.cpu} color="var(--good)" label="CPU" sublabel="Normal" />
+          <ProgressRing percent={stats.ram} color="var(--accent)" label="RAM" sublabel="Normal" />
+          <ProgressRing percent={stats.disk} color="var(--think)" label="Disk" sublabel="Normal" />
         </div>
       </div>
 
       {/* Quick actions */}
-      <div className="glass-panel rounded-xl p-3.5">
-        <h3 className="font-semibold text-[13px] mb-2.5 flex items-center gap-1.5">
-          <span>⚡</span> Quick Actions
-        </h3>
-        <div className="grid grid-cols-2 gap-2">
+      <div className="glass v-card">
+        <div className="v-card-head">
+          <h3 className="v-card-title">
+            <SparkIcon width={16} height={16} /> Quick actions
+          </h3>
+        </div>
+        <div className="v-grid two">
           {QUICK_ACTIONS.map((qa) => {
             const Icon = qa.icon;
             return (
               <button
                 key={qa.label}
                 onClick={() => sendMessage(qa.command)}
-                className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-[11.5px] font-medium glass-panel hover:brightness-110 active:scale-[0.97]"
-                style={qa.danger ? { color: 'var(--jarvis-danger)', borderColor: 'color-mix(in srgb, var(--jarvis-danger) 40%, var(--jarvis-border))' } : undefined}
+                className={`v-tile sm${qa.danger ? ' danger' : ''}`}
               >
-                <Icon width={14} height={14} />
+                <Icon width={15} height={15} style={{ flex: 'none', color: qa.danger ? undefined : 'var(--ink-3)' }} />
                 <span className="truncate">{qa.label}</span>
               </button>
             );
@@ -101,34 +104,29 @@ export default function StatusPanel({ onSelect }: { onSelect: (v: View) => void 
       </div>
 
       {/* Recent logs */}
-      <div className="glass-panel rounded-xl p-3.5 flex-1">
-        <div className="flex items-center justify-between mb-2.5">
-          <h3 className="font-semibold text-[13px] flex items-center gap-1.5">
-            <LogsIcon width={16} height={16} /> Recent Logs
+      <div className="glass v-card flex-1">
+        <div className="v-card-head">
+          <h3 className="v-card-title">
+            <LogsIcon width={16} height={16} /> Recent activity
           </h3>
-          <button onClick={() => onSelect('logs')} className="text-xs font-medium" style={{ color: 'var(--jarvis-accent)' }}>
-            View All
+          <button onClick={() => onSelect('logs')} className="btn ghost sm" style={{ height: 26, padding: '0 10px', color: 'var(--accent-ink)' }}>
+            View all
           </button>
         </div>
-        <div className="flex flex-col gap-2">
-          {recentLogs.length === 0 && (
-            <p className="text-xs" style={{ color: 'var(--jarvis-subtext)' }}>
-              No activity yet — try a command.
-            </p>
-          )}
+        <div className="flex flex-col gap-2.5">
+          {recentLogs.length === 0 && <p className="v-caption">No activity yet — try a command.</p>}
           {recentLogs.map((log) => (
-            <div key={log.id} className="flex items-center gap-2 text-[11px]">
-              <span style={{ color: 'var(--jarvis-subtext)' }} className="w-12 shrink-0 tabular-nums">
-                {formatTime(new Date(log.timestamp))}
-              </span>
+            <div key={log.id} className="flex items-center gap-2.5 text-[12.5px]">
+              <span className="v-mono w-11 shrink-0">{formatTime(new Date(log.timestamp))}</span>
               <span
-                className="w-2 h-2 rounded-full shrink-0"
+                className="w-1.5 h-1.5 rounded-full shrink-0"
                 style={{
-                  backgroundColor:
-                    log.status === 'success' ? 'var(--jarvis-success)' : log.status === 'error' ? 'var(--jarvis-danger)' : 'var(--jarvis-accent)',
+                  backgroundColor: log.status === 'success' ? 'var(--good)' : log.status === 'error' ? 'var(--bad)' : 'var(--accent)',
                 }}
               />
-              <span className="truncate">{log.action}</span>
+              <span className="truncate" style={{ color: 'var(--ink-2)' }}>
+                {log.action}
+              </span>
             </div>
           ))}
         </div>

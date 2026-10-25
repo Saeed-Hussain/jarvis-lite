@@ -6,7 +6,7 @@
 // through useMarkStore; nothing here touches the Live session directly.
 
 import './mark.css';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { markController, useMarkStore } from '@/lib/mark/store';
 import { hud } from '@/lib/mark/hud';
 import HudCanvas from './HudCanvas';
@@ -20,7 +20,7 @@ import ReviewPanel from './ReviewPanel';
 import QuizPanel from './QuizPanel';
 import CameraPreview from './CameraPreview';
 import ClipboardPanel from './ClipboardPanel';
-import { DEFAULT_UI_COLOR, paletteVars } from './palette';
+
 
 type Slot = 'content' | 'review' | 'quiz';
 
@@ -30,7 +30,6 @@ const MIN_PANEL = 60;
 const MIN_HUD = 120;
 
 export default function MarkHud({ className }: { className?: string }) {
-  const accent = useMarkStore((s) => s.config?.ui_color || DEFAULT_UI_COLOR);
   const assistantName = useMarkStore((s) => (s.config?.assistant_name || 'JARVIS').trim() || 'JARVIS');
   const content = useMarkStore((s) => s.content);
   const review = useMarkStore((s) => s.review);
@@ -38,7 +37,6 @@ export default function MarkHud({ className }: { className?: string }) {
   const cameraOn = useMarkStore((s) => s.cameraOn);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const vars = useMemo(() => paletteVars(accent), [accent]);
 
   // ── window title ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -159,7 +157,7 @@ export default function MarkHud({ className }: { className?: string }) {
   const s = useMarkStore.getState;
 
   return (
-    <div className={`mk-root${className ? ` ${className}` : ''}`} style={vars as React.CSSProperties}>
+    <div className={`mk-root${className ? ` ${className}` : ''}`}>
       <Header assistantName={assistantName} drawerOpen={drawerOpen} onToggleDrawer={() => setDrawerOpen((o) => !o)} />
 
       <div className="mk-body">
@@ -167,6 +165,7 @@ export default function MarkHud({ className }: { className?: string }) {
 
         <div className="mk-center" ref={centerRef}>
           <div className="mk-stage">
+            <div className="mk-stage-glow" />
             {/* Kept mounted under the camera so switching back is instant. */}
             <HudCanvas className="mk-hudcanvas" assistantName={assistantName.toUpperCase()} />
             {cameraOn && <CameraPreview />}
@@ -223,12 +222,20 @@ export default function MarkHud({ className }: { className?: string }) {
         <RightPanel />
       </div>
 
-      <div className="mk-footer">
-        <span>{'[F4] Mute  ·  [F11] Fullscreen'}</span>
-        <span style={{ color: 'var(--mk-pri-dim)' }}>By FatihMakes</span>
-      </div>
+      <footer className="mk-footer">
+        <span>
+          <kbd>F4</kbd> Mute <kbd>F11</kbd> Fullscreen <kbd>Esc</kbd> Interrupt <kbd>Ctrl</kbd>+<kbd>Space</kbd> Push to talk
+        </span>
+        <span>Mark LIV by FatihMakes</span>
+      </footer>
 
-      {drawerOpen && <QuickDrawer />}
+      {drawerOpen && (
+        <>
+          {/* Click anywhere else to close, like a menu. */}
+          <div className="mk-scrim" onClick={() => setDrawerOpen(false)} />
+          <QuickDrawer />
+        </>
+      )}
       <ClipboardPanel />
       <MarkOverlays />
     </div>

@@ -1,85 +1,105 @@
 'use client';
 
-// Shared bits for the Mark LIV overlays: the floating panel shell and the Qt
-// point-size scale. Mark sizes its overlays by hand and centres them over the
-// HUD (_centre_overlay); here a flex layer does the centring, and each panel
-// keeps Mark's width, margins and spacing.
+// Shared bits for the overlays: the glass modal shell, grouped wells and
+// labelled fields. The layer (index.tsx + overlays.css) dims and softens the
+// HUD behind and centres the card; each overlay only describes its content.
 
-import type { CSSProperties, ReactNode } from 'react';
+import { useId, type CSSProperties, type ReactNode } from 'react';
+import { ChevronRightIcon, CloseIcon } from '../../Icons';
 
-/** Mark's Qt point sizes in CSS px (1pt ≈ 1.33px). */
-export const PT: Record<number, string> = {
-  7: '9.5px',
-  8: '10.5px',
-  9: '12px',
-  10: '13.3px',
-  11: '14.5px',
-  12: '16px',
-  13: '17.3px',
-};
+/** "JARVIS" → "Jarvis" for prose; short acronyms stay as they are. */
+export function displayName(s: string): string {
+  return s.length <= 4 && s === s.toUpperCase() ? s : s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
 
-export function Panel(props: {
+export function Modal(props: {
   width: number;
-  /** Fixed height (Mark's _OH); clamped to the HUD, like `min(oh, cw.height() - 16)`. */
-  height?: number;
-  margins: [number, number];
-  spacing: number;
+  title: ReactNode;
+  description?: ReactNode;
+  icon?: ReactNode;
+  /** Close button (top right). Omitted → no close button. */
+  onClose?: () => void;
+  footer?: ReactNode;
+  /** Caption shown at the left of the footer. */
+  footerNote?: ReactNode;
   className?: string;
   style?: CSSProperties;
-  children: ReactNode;
+  children?: ReactNode;
 }) {
-  const { width, height, margins, spacing, className, style, children } = props;
+  const { width, title, description, icon, onClose, footer, footerNote, className, style, children } = props;
+  const id = useId();
   return (
     <div
-      className={`mko-panel${className ? ` ${className}` : ''}`}
-      style={{ width, maxWidth: '100%', height, ...style }}
+      className={`mko-modal glass-strong${className ? ` ${className}` : ''}`}
+      style={{ width, ...style }}
       role="dialog"
+      aria-modal="true"
+      aria-labelledby={`${id}-t`}
     >
-      <div
-        className="mko-body"
-        style={{ padding: `${margins[1]}px ${margins[0]}px`, gap: spacing, flex: '1 1 auto' }}
-      >
-        {children}
-      </div>
+      <header className="mko-head">
+        {icon && <span className="mko-head-ico">{icon}</span>}
+        <div className="mko-head-text">
+          <h2 className="mko-title" id={`${id}-t`}>
+            {title}
+          </h2>
+          {description && <p className="mko-desc">{description}</p>}
+        </div>
+        {onClose && (
+          <button className="btn ghost icon sm mko-close" aria-label="Close" title="Close" onClick={onClose}>
+            <CloseIcon width={16} height={16} />
+          </button>
+        )}
+      </header>
+      {children && <div className="mko-content">{children}</div>}
+      {footer && (
+        <footer className="mko-foot">
+          {footerNote && <span className="mko-foot-note">{footerNote}</span>}
+          <div className="mko-foot-btns">{footer}</div>
+        </footer>
+      )}
     </div>
   );
 }
 
-export function Sep({ margin = 2 }: { margin?: number }) {
-  return <hr className="mko-sep" style={{ margin: `${margin}px 0` }} />;
-}
-
-/** A spacing item, like QBoxLayout.addSpacing(). */
-export function Gap({ h }: { h: number }) {
-  return <div style={{ height: h, flex: 'none' }} />;
-}
-
-/** Plain Mark label: Courier, colour, size, optional bold. */
-export function Lbl(props: {
-  children: ReactNode;
-  pt?: number;
-  bold?: boolean;
-  color?: string;
-  align?: 'left' | 'center';
-  style?: CSSProperties;
-  title?: string;
-}) {
-  const { children, pt = 9, bold, color = 'var(--o-pri)', align = 'left', style, title } = props;
+/** A labelled group: small caption above a translucent well. */
+export function Group(props: { title?: ReactNode; aside?: ReactNode; className?: string; children: ReactNode }) {
+  const { title, aside, className, children } = props;
   return (
-    <div
-      title={title}
-      style={{
-        fontSize: PT[pt] ?? `${pt * 1.33}px`,
-        fontWeight: bold ? 'bold' : 'normal',
-        color,
-        textAlign: align,
-        whiteSpace: 'pre-wrap',
-        flex: 'none',
-        ...style,
-      }}
-    >
+    <section className="mko-group">
+      {(title || aside) && (
+        <div className="mko-group-hdr">
+          {title && <span className="mko-group-title">{title}</span>}
+          {aside}
+        </div>
+      )}
+      <div className={`mko-well${className ? ` ${className}` : ''}`}>{children}</div>
+    </section>
+  );
+}
+
+/** Label + control + optional hint, stacked. */
+export function Field(props: { label: ReactNode; hint?: ReactNode; aside?: ReactNode; children: ReactNode }) {
+  const { label, hint, aside, children } = props;
+  return (
+    <label className="mko-field">
+      <span className="mko-field-top">
+        <span className="mko-label">{label}</span>
+        {aside}
+      </span>
       {children}
-    </div>
+      {hint && <span className="mko-hint">{hint}</span>}
+    </label>
+  );
+}
+
+/** A native select dressed as a .field, with a chevron. */
+export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  const { className, ...rest } = props;
+  return (
+    <span className="mko-select">
+      <select className={`field${className ? ` ${className}` : ''}`} {...rest} />
+      <ChevronRightIcon width={16} height={16} className="mko-select-chev" aria-hidden />
+    </span>
   );
 }
 

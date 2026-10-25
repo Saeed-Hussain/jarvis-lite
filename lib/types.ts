@@ -55,6 +55,7 @@ export interface LogEntry {
 
 export type TaskKind =
   | 'open_app'
+  | 'close_app'
   | 'open_site'
   | 'search'
   | 'send_message'
@@ -262,7 +263,8 @@ declare global {
       isElectron: boolean;
       getMemory: () => Promise<JarvisMemory>;
       setMemory: (data: JarvisMemory) => Promise<boolean>;
-      openApp: (appKey: string, options?: { profile?: string; url?: string }) => Promise<ActionResult>;
+      openApp: (appKey: string, options?: { profile?: string; url?: string; label?: string }) => Promise<ActionResult>;
+      closeApp: (appKey: string, options?: { label?: string }) => Promise<ActionResult>;
       openUrl: (url: string) => Promise<ActionResult>;
       openUrlInProfile: (url: string, browser: string, profile?: string) => Promise<ActionResult>;
       openCustom: (target: string) => Promise<ActionResult>;
@@ -298,6 +300,8 @@ declare global {
       close: () => Promise<void>;
       showWindow: () => Promise<void>;
       hideWindow: () => Promise<void>;
+      /** Hidden, minimised or back on screen. Returns an unsubscribe function. */
+      onVisibility?: (handler: (visible: boolean) => void) => () => void;
       pilot: PilotBridge;
     };
   }

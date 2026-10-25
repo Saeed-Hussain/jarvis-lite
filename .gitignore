@@ -26,3 +26,7 @@ memory.json.tmp
 # os
 .DS_Store
 Thumbs.db
+
+# promo film output and work files (tools/video)
+video/
+.cache/

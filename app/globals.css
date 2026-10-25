@@ -2,85 +2,367 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+/*
+ * Jarvis — glass.
+ *
+ * Frosted panels floating over a slow field of colour, after Cadence. The
+ * colour lives only *behind* the glass and is derived from the assistant's
+ * accent (lib/mark/store.ts applyAccent), so retinting the assistant retints
+ * the room. The interface itself stays near-monochrome: content reads first,
+ * light comes through second.
+ *
+ * Both themes are one design with the light exchanged. Everything below is a
+ * token; components never name a raw colour.
+ */
 
-  /* Light theme (default) */
-  --jarvis-bg: #f5f6fa;
-  --jarvis-panel: #ffffff;
-  --jarvis-panel-2: #ffffff;
-  --jarvis-border: #e4e7ee;
-  --jarvis-text: #161a23;
-  --jarvis-subtext: #6b7280;
-  --jarvis-accent: #3b82f6;
-  --jarvis-accent-2: #22d3ee;
-  --jarvis-success: #16a34a;
-  --jarvis-danger: #dc2626;
-  --jarvis-purple: #7c3aed;
+:root {
+  --font-sans: 'Inter Variable', 'Segoe UI Variable', 'Segoe UI', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'Cascadia Mono', ui-monospace, monospace;
+
+  --bg: #eceef5;
+  --ink: #0b0c12;
+  --ink-2: #464a58;
+  --ink-3: #80859a;
+  --ink-4: #a9adbd;
+
+  --glass: rgba(255, 255, 255, 0.56);
+  --glass-strong: rgba(255, 255, 255, 0.82);
+  --glass-soft: rgba(255, 255, 255, 0.34);
+  --glass-hover: rgba(255, 255, 255, 0.72);
+  --highlight: rgba(255, 255, 255, 0.9);
+  --line: rgba(15, 17, 30, 0.075);
+  --line-2: rgba(15, 17, 30, 0.13);
+  --fill: rgba(15, 17, 30, 0.035);
+  --fill-2: rgba(15, 17, 30, 0.065);
+  --fill-3: rgba(15, 17, 30, 0.1);
+
+  --primary: #0b0c12;
+  --on-primary: #ffffff;
+  /* --accent / --accent-rgb / --blob-* are set from the assistant's colour. */
+  --accent: #0aa9d6;
+  --accent-rgb: 10, 169, 214;
+  --accent-soft: rgba(var(--accent-rgb), 0.12);
+  --accent-ink: var(--accent-ink-light, #087ea1);
+  --good: #0f9f6e;
+  --warn: #c7811a;
+  --bad: #e0445c;
+  --think: #8b5cf6;
+
+  --shadow-sm: 0 1px 2px rgba(16, 18, 34, 0.05), 0 2px 8px -2px rgba(16, 18, 34, 0.06);
+  --shadow: 0 1px 2px rgba(16, 18, 34, 0.04), 0 10px 30px -10px rgba(16, 18, 34, 0.14), 0 30px 70px -30px rgba(40, 30, 110, 0.18);
+  --shadow-lg: 0 2px 6px rgba(16, 18, 34, 0.05), 0 24px 60px -18px rgba(16, 18, 34, 0.22), 0 50px 120px -40px rgba(60, 40, 160, 0.25);
+
+  --blob-1: #7dd3fc;
+  --blob-2: #a78bfa;
+  --blob-3: #f9a8d4;
+  --blob-4: #fcd34d;
+  --blob-opacity: 0.55;
+
+  --blur: 28px;
+  --radius-sm: 10px;
+  --radius: 16px;
+  --radius-lg: 22px;
+  --ease: cubic-bezier(0.22, 0.8, 0.24, 1);
+  --spring: cubic-bezier(0.34, 1.4, 0.5, 1);
+  --gap: 12px;
+
+  /* Legacy jarvis-lite names, so the original views join the glass. */
+  --jarvis-bg: transparent;
+  --jarvis-panel: var(--glass);
+  --jarvis-panel-2: var(--fill);
+  --jarvis-border: var(--line);
+  --jarvis-text: var(--ink);
+  --jarvis-subtext: var(--ink-2);
+  --jarvis-accent: var(--accent);
+  --jarvis-accent-2: var(--accent);
+  --jarvis-success: var(--good);
+  --jarvis-danger: var(--bad);
+  --jarvis-purple: var(--think);
+
+  color-scheme: light;
 }
 
 .dark {
-  --jarvis-bg: #090d16;
-  --jarvis-panel: #0f1420;
-  --jarvis-panel-2: #131a29;
-  --jarvis-border: #1e2636;
-  --jarvis-text: #eef1f8;
-  --jarvis-subtext: #8892a6;
-  --jarvis-accent: #3b82f6;
-  --jarvis-accent-2: #22d3ee;
-  --jarvis-success: #22c55e;
-  --jarvis-danger: #ef4444;
-  --jarvis-purple: #8b5cf6;
+  --bg: #05060a;
+  --ink: #f2f3f8;
+  --ink-2: #a6a9b9;
+  --ink-3: #6d7185;
+  --ink-4: #4b4e5e;
+
+  --glass: rgba(20, 21, 31, 0.52);
+  --glass-strong: rgba(24, 25, 37, 0.84);
+  --glass-soft: rgba(22, 23, 34, 0.3);
+  --glass-hover: rgba(34, 36, 52, 0.6);
+  --highlight: rgba(255, 255, 255, 0.075);
+  --line: rgba(255, 255, 255, 0.065);
+  --line-2: rgba(255, 255, 255, 0.12);
+  --fill: rgba(255, 255, 255, 0.035);
+  --fill-2: rgba(255, 255, 255, 0.065);
+  --fill-3: rgba(255, 255, 255, 0.1);
+
+  --primary: #f2f3f8;
+  --on-primary: #07080c;
+  --accent-soft: rgba(var(--accent-rgb), 0.16);
+  --accent-ink: var(--accent);
+  --good: #34d399;
+  --warn: #fbbf24;
+  --bad: #fb7185;
+  --think: #a78bfa;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 16px 40px -12px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 2px 6px rgba(0, 0, 0, 0.35), 0 30px 80px -20px rgba(0, 0, 0, 0.7);
+
+  --blob-opacity: 0.42;
+
+  color-scheme: dark;
 }
 
-* {
-  border-color: var(--jarvis-border);
-  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, opacity 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
-}
+/* ─── Base ─────────────────────────────────────────────────────────────── */
 
-html,
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
 body {
-  height: 100%;
-  background-color: var(--jarvis-bg);
-  color: var(--jarvis-text);
-  font-size: 14px;
-}
-
-body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
   font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: -0.006em;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
+  transition: background-color 0.5s var(--ease), color 0.3s var(--ease);
 }
 
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--jarvis-border);
+::selection { background: var(--accent); color: #fff; }
+
+button { cursor: pointer; }
+.mono { font-family: var(--font-mono); font-feature-settings: 'zero' 0; }
+.tnum { font-variant-numeric: tabular-nums; }
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
   border-radius: 8px;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: var(--jarvis-accent);
-}
+
+/* Thin, quiet scrollbars that live on the glass. */
+* { scrollbar-width: thin; scrollbar-color: var(--fill-3) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--fill-3); border-radius: 99px; border: 3px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background-color: var(--ink-4); }
 
 /* Draggable title-bar region for the frameless Electron window */
-.app-drag {
-  -webkit-app-region: drag;
-}
-.app-no-drag {
-  -webkit-app-region: no-drag;
+.app-drag { -webkit-app-region: drag; }
+.app-no-drag { -webkit-app-region: no-drag; }
+
+/* ─── The ambient field ────────────────────────────────────────────────── */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
 }
 
+/* Radial gradients rather than blurred shapes: the same softness, and moving
+   them is a transform the compositor does for free. */
+.blob {
+  position: absolute;
+  width: 70vmax;
+  height: 70vmax;
+  border-radius: 50%;
+  opacity: var(--blob-opacity);
+  will-change: transform;
+  transition: opacity 0.8s var(--ease), background 1.2s var(--ease);
+}
+.blob.b1 { background: radial-gradient(circle, var(--blob-1) 0%, transparent 62%); top: -32vmax; left: -18vmax; animation: drift1 38s ease-in-out infinite alternate; }
+.blob.b2 { background: radial-gradient(circle, var(--blob-2) 0%, transparent 62%); top: -20vmax; right: -30vmax; animation: drift2 46s ease-in-out infinite alternate; }
+.blob.b3 { background: radial-gradient(circle, var(--blob-3) 0%, transparent 62%); bottom: -38vmax; left: 10vmax; animation: drift3 52s ease-in-out infinite alternate; }
+.blob.b4 { background: radial-gradient(circle, var(--blob-4) 0%, transparent 60%); bottom: -30vmax; right: -24vmax; animation: drift4 44s ease-in-out infinite alternate; opacity: calc(var(--blob-opacity) * 0.8); }
+
+@keyframes drift1 { to { transform: translate3d(18vmax, 14vmax, 0) scale(1.15); } }
+@keyframes drift2 { to { transform: translate3d(-16vmax, 20vmax, 0) scale(0.9); } }
+@keyframes drift3 { to { transform: translate3d(22vmax, -16vmax, 0) scale(1.1); } }
+@keyframes drift4 { to { transform: translate3d(-20vmax, -12vmax, 0) scale(1.2); } }
+
+/* The field breathes with the assistant's voice. */
+.backdrop.speaking .blob { opacity: calc(var(--blob-opacity) * 1.3); }
+
+/* Lite effects: the field holds still, so the glass above it never has to be
+   re-blurred — the single most expensive thing glass does on a weak GPU. */
+.fx-lite .blob { animation: none; }
+
+/* Hidden in the tray: nothing animates for a window nobody can see. */
+.app-hidden *,
+.app-hidden *::before,
+.app-hidden *::after { animation-play-state: paused !important; }
+@media (prefers-reduced-motion: reduce) { .blob { animation: none; } }
+
+/* Grain, so the gradients never band. */
+.grain {
+  position: absolute;
+  inset: -50%;
+  opacity: 0.06;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  mix-blend-mode: overlay;
+}
+.dark .grain { opacity: 0.09; }
+
+/* ─── Glass ────────────────────────────────────────────────────────────── */
+
+.glass,
+.glass-strong,
+.glass-soft,
 .glass-panel {
-  background-color: var(--jarvis-panel);
-  border: 1px solid var(--jarvis-border);
+  position: relative;
+  border: 1px solid var(--line);
+  box-shadow: inset 0 1px 0 var(--highlight), var(--shadow);
+  -webkit-backdrop-filter: blur(var(--blur)) saturate(175%);
+  backdrop-filter: blur(var(--blur)) saturate(175%);
+}
+.glass, .glass-panel { background: var(--glass); }
+.glass-strong { background: var(--glass-strong); box-shadow: inset 0 1px 0 var(--highlight), var(--shadow-lg); }
+.glass-soft { background: var(--glass-soft); box-shadow: inset 0 1px 0 var(--highlight), var(--shadow-sm); }
+
+/* Surfaces inside glass: translucent, never blurred again. */
+.well {
+  background: var(--fill);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
 }
 
-.text-balance {
-  text-wrap: balance;
+/* ─── Shell ────────────────────────────────────────────────────────────── */
+
+.app-shell {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  gap: var(--gap);
+  height: 100vh;
+  padding: var(--gap);
 }
+
+.app-main {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  /* A pane without its own blur, so the panels inside blur the field
+     directly rather than blurring a blur. */
+  background: var(--glass-soft);
+  border: 1px solid var(--line);
+  box-shadow: inset 0 1px 0 var(--highlight), var(--shadow-sm);
+}
+
+.page-in { animation: page-in 0.55s var(--ease) both; }
+@keyframes page-in {
+  from { opacity: 0; transform: translate3d(0, 10px, 0); filter: blur(4px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+
+/* ─── Controls ─────────────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font-size: 13.5px;
+  font-weight: 560;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  border: 1px solid var(--line);
+  background: var(--fill-2);
+  color: var(--ink);
+  transition: background 0.2s var(--ease), transform 0.2s var(--spring), border-color 0.2s, opacity 0.2s, box-shadow 0.2s;
+}
+.btn:hover { background: var(--fill-3); }
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.45; pointer-events: none; }
+.btn.primary { background: var(--primary); color: var(--on-primary); border-color: transparent; box-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.45); }
+.btn.primary:hover { opacity: 0.9; }
+.btn.accent { background: var(--accent); color: #fff; border-color: transparent; box-shadow: 0 8px 22px -10px rgba(var(--accent-rgb), 0.9); }
+.btn.ghost { background: transparent; border-color: transparent; }
+.btn.ghost:hover { background: var(--fill-2); }
+.btn.danger { color: var(--bad); }
+.btn.sm { height: 32px; padding: 0 12px; font-size: 12.5px; }
+.btn.icon { width: 38px; padding: 0; }
+.btn.icon.sm { width: 32px; }
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 560;
+  color: var(--ink-2);
+  background: var(--fill-2);
+  border: 1px solid var(--line);
+  white-space: nowrap;
+}
+.chip .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+/* A switch, not a "ON/OFF" label: the state is the shape. */
+.switch {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--fill-3);
+  transition: background 0.25s var(--ease);
+}
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.3s var(--spring);
+}
+.switch.on { background: var(--accent); }
+.switch.on::after { transform: translateX(14px); }
+
+.field {
+  width: 100%;
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line-2);
+  background: var(--fill);
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+.field::placeholder { color: var(--ink-3); }
+.field:focus { border-color: rgba(var(--accent-rgb), 0.6); box-shadow: 0 0 0 4px var(--accent-soft); background: var(--glass-hover); }
+
+.label-caps {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.text-balance { text-wrap: balance; }

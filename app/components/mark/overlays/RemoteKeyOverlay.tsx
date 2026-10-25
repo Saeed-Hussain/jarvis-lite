@@ -8,7 +8,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useMarkStore } from '@/lib/mark/store';
-import { Lbl, Panel, Sep } from './common';
+import { CheckIcon, PhoneIcon } from '../../Icons';
+import { Modal, displayName } from './common';
 
 const EXPIRY_SECS = 600;
 
@@ -97,67 +98,53 @@ export default function RemoteKeyOverlay() {
   const ss = String(remaining % 60).padStart(2, '0');
 
   return (
-    <Panel width={400} height={465} margins={[24, 16]} spacing={5} style={{ borderRadius: 14, background: 'rgba(0, 4, 12, 0.95)' }}>
-      <Lbl pt={12} bold align="center">
-        ◈  REMOTE ACCESS
-      </Lbl>
-      <Sep margin={1} />
-
+    <Modal
+      width={400}
+      icon={<PhoneIcon />}
+      title="Remote control"
+      description="Scan with your phone’s camera to connect instantly."
+      onClose={close}
+      footer={
+        <>
+          <button className="btn" disabled={busy} onClick={refreshKey}>
+            New key
+          </button>
+          <button className="btn primary" onClick={close}>
+            Done
+          </button>
+        </>
+      }
+    >
       {connected ? (
-        <div className="mko-qr connected">✓</div>
+        <div className="mko-qr connected">
+          <CheckIcon />
+        </div>
       ) : (
         <div className="mko-qr">
           {qr.kind === 'img' ? (
             <img src={qr.src} alt="Pairing QR code" />
           ) : (
-            <span style={{ fontSize: qr.text.length > 1 ? '9.5px' : undefined, color: qr.text.length > 1 ? 'var(--o-pri)' : undefined, overflowWrap: 'anywhere' }}>
+            <span
+              className={qr.text.length > 1 ? 'mono' : undefined}
+              style={{ fontSize: qr.text.length > 1 ? '11px' : undefined, overflowWrap: 'anywhere' }}
+            >
               {qr.text}
             </span>
           )}
         </div>
       )}
 
-      <Lbl pt={8} align="center" color="var(--o-text-dim)">
-        Scan with phone camera to connect instantly
-      </Lbl>
-      <Sep margin={1} />
-      <Lbl pt={7} color="var(--o-text-dim)">
-        Or enter manually:
-      </Lbl>
-      <Lbl
-        pt={8}
-        align="center"
-        color="var(--o-pri-dim)"
-        style={{ userSelect: 'text', overflowWrap: 'anywhere' }}
-      >
-        {remote ? remote.manualUrl || remote.url : ''}
-      </Lbl>
+      <div className="mko-or">or enter it manually</div>
 
-      <div className={`mko-key${connected ? ' connected' : ''}`} style={{ flex: 'none' }}>
-        {connected ? 'CONNECTED' : remote?.key || '—'}
+      <div className="mko-well" style={{ gap: 10 }}>
+        <div className="mko-url">{remote ? remote.manualUrl || remote.url : ''}</div>
+        <div className={`mko-key${connected ? ' connected' : ''}`}>{connected ? 'Connected' : remote?.key || '—'}</div>
       </div>
 
-      <Lbl
-        pt={8}
-        align="center"
-        color={connected ? 'var(--o-green)' : 'var(--o-text-med)'}
-      >
-        {connected ? `Phone connected — ${name} ready` : `Key expires in  ${mm}:${ss}`}
-      </Lbl>
-
-      <div style={{ flex: '1 1 auto' }} />
-      <div className="mko-row" style={{ flex: 'none' }}>
-        <button className="mko-btn mko-btn-remote-pri" disabled={busy} onClick={refreshKey}>
-          NEW KEY
-        </button>
-        <button
-          className="mko-btn mko-btn-sec"
-          style={{ height: 32, borderRadius: 5, fontWeight: 'bold', fontSize: '10.5px' }}
-          onClick={close}
-        >
-          DISMISS
-        </button>
-      </div>
-    </Panel>
+      <span className={`chip mko-expiry${connected ? ' ok' : ''}`}>
+        <i className="dot" />
+        <span className="tnum">{connected ? `Phone connected — ${displayName(name)} ready` : `Key expires in ${mm}:${ss}`}</span>
+      </span>
+    </Modal>
   );
 }

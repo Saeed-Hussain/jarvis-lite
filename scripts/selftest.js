@@ -220,6 +220,62 @@ function ok(name, condition, detail = '') {
 }
 
 // ---------------------------------------------------------------------------
+// Command routing: every alias, and the phrasings that used to misfire
+// ---------------------------------------------------------------------------
+{
+  const { planUtterance } = load('lib/planner.ts');
+  const { KNOWN_APPS, KNOWN_SITES } = load('lib/commands.ts');
+  const memory = { last_command: '', last_app: '', custom_commands: {}, contacts: { 'john smith': '+15550000' }, logs: [] };
+
+  /** A plan as one comparable line: "kind:target" per task, plus the slot named. */
+  const route = (text, slot) =>
+    planUtterance(text, memory)
+      .tasks.map((t) => [t.kind + (t.target ? `:${t.target}` : ''), slot ? t[slot] : undefined].filter(Boolean).join(' '))
+      .join(' | ');
+
+  const misrouted = [];
+  for (const app of KNOWN_APPS) {
+    for (const alias of app.aliases) {
+      if (route(`open ${alias}`) !== `open_app:${app.key}`) misrouted.push(`open ${alias} -> ${route(`open ${alias}`)}`);
+    }
+  }
+  for (const site of KNOWN_SITES) {
+    for (const alias of site.aliases) {
+      if (route(`open ${alias}`) !== `open_site:${site.key}`) misrouted.push(`open ${alias} -> ${route(`open ${alias}`)}`);
+    }
+  }
+  ok('every app and site alias opens itself', misrouted.length === 0, misrouted.join('; '));
+
+  // Safety first: a search must never reach a system action.
+  check('"search how to lock files" searches', route('search how to lock files', 'query'), 'search how to lock files');
+  check('"find restart instructions" searches', route('find restart instructions'), 'search');
+  check('"restart chrome" restarts chrome, not the PC', route('restart chrome'), 'close_app:chrome | wait | open_app:chrome');
+  check('"close chrome" closes it', route('close chrome'), 'close_app:chrome');
+
+  check('"docker desktop" is the app, not the Desktop folder', route('open docker desktop'), 'open_app:docker');
+  check('"play music" is not the Music folder', route('open spotify and play music'), 'open_app:spotify | unknown:play music');
+  check('apostrophes are not quotes', route("what's today's date"), 'query_date');
+  check('"what is today"', route('what is today'), 'query_date');
+  check('"tell me the time" is a question', route('tell me the time'), 'query_time');
+  check('time somewhere else is a search', route('what time is it in tokyo', 'query'), 'search time in tokyo');
+  check('bare "whatsapp web" opens the site', route('whatsapp web'), 'open_site:whatsappweb');
+
+  check('"text sara hello"', route('text sara hello', 'message'), 'send_message hello');
+  check('"text sara hello" names sara', route('text sara hello', 'recipient'), 'send_message sara');
+  check('"send a message to john saying hi"', route('send a message to john saying hi', 'recipient'), 'send_message john');
+  check('"send hi to sara"', route('send hi to sara', 'message'), 'send_message hi');
+  check('"tell sara I\'m coming"', route("tell sara I'm coming", 'message'), "send_message I'm coming");
+  check('a saved two-word contact', route('text john smith hi', 'recipient'), 'send_message john smith');
+  check('a number then a body', route('whatsapp +1 555 123 4567 hi there', 'message'), 'send_message hi there');
+
+  check('site search: on youtube', route('search lofi on youtube', 'query'), 'search:youtube lofi');
+  check('site search: github for', route('search github for react', 'query'), 'search:github react');
+  check('play on youtube', route('play despacito on youtube'), 'search:youtube');
+  check('open a site then search it', route('open youtube and search lofi beats', 'query'), 'search:youtube lofi beats');
+  check('plain search stays google', route('search for cats and dogs', 'query'), 'search cats and dogs');
+}
+
+// ---------------------------------------------------------------------------
 
 console.log(`\n${passed} passed, ${failures.length} failed\n`);
 for (const failure of failures) console.error(`  ✗ ${failure}\n`);

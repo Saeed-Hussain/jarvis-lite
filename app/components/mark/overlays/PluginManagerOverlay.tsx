@@ -9,7 +9,8 @@
 import { useEffect, useState } from 'react';
 import { useMarkStore } from '@/lib/mark/store';
 import { markBridge, type PluginInfo } from '@/lib/mark/types';
-import { Gap, Lbl, Panel, Sep, errText } from './common';
+import { FolderIcon, PuzzleIcon } from '../../Icons';
+import { Modal, errText } from './common';
 
 export default function PluginManagerOverlay() {
   const [plugins, setPlugins] = useState<PluginInfo[] | null>(null);
@@ -63,85 +64,89 @@ export default function PluginManagerOverlay() {
     }
   };
 
-  return (
-    <Panel width={420} margins={[20, 16]} spacing={6}>
-      <Lbl pt={12} bold>
-        🧩  PLUGIN MANAGER
-      </Lbl>
-      <Sep />
+  const close = () => useMarkStore.getState().setOverlay(null);
 
+  return (
+    <Modal
+      width={460}
+      icon={<PuzzleIcon />}
+      title="Plugins"
+      description="Turn skills on and off, or drop new ones into the plugins folder."
+      onClose={close}
+      footer={
+        <>
+          <button className="btn ghost" onClick={openFolder}>
+            <FolderIcon width={16} height={16} />
+            Open plugins folder
+          </button>
+          <button className="btn primary" onClick={close}>
+            Done
+          </button>
+        </>
+      }
+    >
       {plugins === null && (
-        <Lbl pt={8} color="var(--o-text-dim)">
-          Scanning…
-        </Lbl>
+        <div className="mko-well">
+          <div className="mko-empty">Scanning…</div>
+        </div>
       )}
       {plugins !== null && plugins.length === 0 && (
-        <Lbl pt={8} color="var(--o-text-dim)">
-          No plugins found in /plugins.
-        </Lbl>
+        <div className="mko-well">
+          <div className="mko-empty">
+            <span className="mko-empty-ico">
+              <PuzzleIcon />
+            </span>
+            <b>No plugins yet</b>
+            No plugins found in /plugins.
+          </div>
+        </div>
       )}
 
-      {plugins?.map((p) => (
-        <div key={`${p.name}\u0000${p.file}`} style={{ flex: 'none' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Lbl
-              pt={8}
-              color={p.valid ? 'var(--o-text)' : 'var(--o-text-dim)'}
-              title={p.valid ? p.description : p.error}
-              style={{
-                flex: '1 1 auto',
-                minWidth: 0,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {p.valid ? p.name : `${p.name}  (⚠ ${p.file})`}
-            </Lbl>
-            {p.valid ? (
+      {plugins !== null && plugins.length > 0 && (
+        <div className="mko-well rows">
+          {plugins.map((p) =>
+            p.valid ? (
               <button
-                className={`mko-toggle${p.enabled ? ' on-green' : ''}`}
-                style={{ width: 72, height: 24, flex: 'none' }}
+                key={`${p.name}\u0000${p.file}`}
+                className="mk-row"
+                role="switch"
+                aria-checked={p.enabled}
+                title={p.description}
                 disabled={busy === p.name}
                 onClick={() => toggle(p)}
               >
-                {p.enabled ? 'ON' : 'OFF'}
+                <span className="mk-row-ico">
+                  <PuzzleIcon />
+                </span>
+                <span className="mk-row-text">
+                  <b className="mk-ellipsis">{p.name}</b>
+                  {p.description && <small className="mk-ellipsis">{p.description}</small>}
+                </span>
+                <span className={`switch${p.enabled ? ' on' : ''}`} />
               </button>
             ) : (
-              <button className="mko-toggle" style={{ width: 72, height: 24, flex: 'none' }} disabled>
-                BROKEN
-              </button>
-            )}
-          </div>
-          {!p.valid && p.error && (
-            <Lbl pt={7} color="#ff6b6b" style={{ marginTop: 2, overflowWrap: 'anywhere' }}>
-              {p.error}
-            </Lbl>
+              <div key={`${p.name}\u0000${p.file}`} className="mk-row" title={p.error}>
+                <span className="mk-row-ico" style={{ color: 'var(--bad)' }}>
+                  <PuzzleIcon />
+                </span>
+                <span className="mk-row-text">
+                  <b className="mk-ellipsis" style={{ color: 'var(--ink-2)' }}>
+                    {p.name}
+                  </b>
+                  <small className="mk-ellipsis">{p.file}</small>
+                  {p.error && <span className="mko-row-sub-err">{p.error}</span>}
+                </span>
+                <span className="chip" style={{ color: 'var(--bad)' }}>
+                  <i className="dot" />
+                  Broken
+                </span>
+              </div>
+            ),
           )}
         </div>
-      ))}
-
-      {error && (
-        <Lbl pt={7} color="#ff6b6b" style={{ overflowWrap: 'anywhere' }}>
-          {error}
-        </Lbl>
       )}
 
-      <Gap h={4} />
-      <button
-        className="mko-btn mko-btn-sec"
-        style={{ height: 30, flex: 'none' }}
-        onClick={openFolder}
-      >
-        OPEN PLUGINS FOLDER
-      </button>
-      <button
-        className="mko-btn mko-btn-sec"
-        style={{ height: 30, flex: 'none' }}
-        onClick={() => useMarkStore.getState().setOverlay(null)}
-      >
-        CLOSE
-      </button>
-    </Panel>
+      {error && <div className="mko-err">{error}</div>}
+    </Modal>
   );
 }

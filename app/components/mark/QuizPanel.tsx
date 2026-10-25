@@ -149,9 +149,8 @@ export default function QuizPanel({
   }
 
   return (
-    <div className="mk-panel" style={{ height, gap: 6 }}>
-      <PanelHeader title={(topic || 'quiz').toUpperCase().slice(0, 48)} right={`${i + 1} / ${total}`} onDismiss={onDismiss} />
-      <div className="mk-rule" />
+    <div className="mk-panel glass" style={{ height, gap: 6 }}>
+      <PanelHeader title={`Quiz — ${(topic || "quiz").slice(0, 48)}`} right={`${i + 1} / ${total}`} onDismiss={onDismiss} />
       <div className="mk-quiz-q">{String(q.question ?? '')}</div>
 
       <div className="mk-quiz-answers">

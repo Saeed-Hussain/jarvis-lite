@@ -122,3 +122,50 @@ export const APP_ICON_MAP: Record<string, (p: IconProps) => JSX.Element> = {
   mail: NoteIcon,
   github: CodeIcon,
 };
+
+// ── Added for the glass HUD ────────────────────────────────────────────────
+export const MicOffIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M9 9v2a3 3 0 0 0 5.1 2.1M15 10V5a3 3 0 0 0-5.7-1.3" /><path d="M19 11a7 7 0 0 1-1.2 3.9M5 11a7 7 0 0 0 10.5 6M12 18v3" /><path d="m3 3 18 18" /></svg>
+);
+export const HandIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M18 11V6a2 2 0 0 0-4 0v5M14 10V4a2 2 0 0 0-4 0v6M10 10.5V6a2 2 0 0 0-4 0v8" /><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.9-6-2.4l-3.6-3.6a2 2 0 0 1 2.8-2.8L7 15" /></svg>
+);
+export const UploadIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M12 16V4M7 9l5-5 5 5" /><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" /></svg>
+);
+export const SlidersIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M4 7h10M18 7h2M4 17h2M10 17h10" /><circle cx="16" cy="7" r="2" /><circle cx="8" cy="17" r="2" /></svg>
+);
+export const PhoneIcon = (p: IconProps) => (
+  <svg {...base(p)}><rect x="7" y="2.5" width="10" height="19" rx="2.5" /><path d="M11 18h2" /></svg>
+);
+export const ExpandIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>
+);
+export const LinkIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></svg>
+);
+export const PaletteIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.6-.8 1.6-1.6 0-.5-.2-.8-.4-1.1-.3-.3-.4-.6-.4-1 0-.9.7-1.6 1.6-1.6H16a5 5 0 0 0 5-5c0-4.2-4-7.7-9-7.7Z" /><circle cx="7.5" cy="11.5" r="1" /><circle cx="10.5" cy="7.5" r="1" /><circle cx="15" cy="7.8" r="1" /></svg>
+);
+export const SparkIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6" /></svg>
+);
+export const EarIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M6 8.5a6 6 0 1 1 12 0c0 3-2 4.2-3 5.4-.8 1-1 2-1 3.1a3 3 0 0 1-5.5 1.6" /><path d="M9.5 9a2.5 2.5 0 0 1 5 0" /></svg>
+);
+export const HeadphonesIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M4 15v-3a8 8 0 0 1 16 0v3" /><rect x="3" y="14" width="4" height="7" rx="1.5" /><rect x="17" y="14" width="4" height="7" rx="1.5" /></svg>
+);
+export const PuzzleIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M10 4a2 2 0 1 1 4 0v1h4v4h-1a2 2 0 1 0 0 4h1v5H5v-5h1a2 2 0 1 0 0-4H5V5h5V4Z" /></svg>
+);
+export const FaceIcon = (p: IconProps) => (
+  <svg {...base(p)}><circle cx="12" cy="12" r="9" /><path d="M9 10h.01M15 10h.01M9 15a4 4 0 0 0 6 0" /></svg>
+);
+export const ShortcutIcon = (p: IconProps) => (
+  <svg {...base(p)}><rect x="3" y="3" width="18" height="18" rx="4" /><path d="M9 15l6-6M10 9h5v5" /></svg>
+);
+export const CoffeeIcon = (p: IconProps) => (
+  <svg {...base(p)}><path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9Z" /><path d="M17 11h1.5a2.5 2.5 0 0 1 0 5H17M8 3v3M12 3v3" /></svg>
+);

@@ -105,7 +105,7 @@ async function runTask(
       const unsupportedProfile = task.profile && !profile;
 
       const result = api
-        ? await api.openApp(key, { profile })
+        ? await api.openApp(key, { profile, label: app?.label })
         : simulated(`Opening ${label}${profile ? ` with profile "${profile}"` : ''}`);
 
       next.last_app = key;
@@ -118,6 +118,16 @@ async function runTask(
         response += ` (${label} doesn't support named profiles, so I ignored "${task.profile}".)`;
       }
       return { result: { ...result, appLabel: label, appIcon: app?.icon }, response, memory: next };
+    }
+
+    case 'close_app': {
+      const app = KNOWN_APPS.find((a) => a.key === task.target);
+      const label = app?.label ?? task.target ?? 'that app';
+      const result = api
+        ? await api.closeApp(task.target ?? '', { label: app?.label })
+        : simulated(`Closing ${label}`);
+      next.last_command = `close ${task.target ?? ''}`.trim();
+      return { result: { ...result, appLabel: label, appIcon: app?.icon }, response: result.message, memory: next };
     }
 
     case 'open_site': {
@@ -142,16 +152,18 @@ async function runTask(
 
     case 'search': {
       const query = task.query ?? '';
-      const url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+      // A site search arrives with its own results URL; anything else is Google.
+      const site = task.url ? KNOWN_SITES.find((s) => s.key === task.target) : undefined;
+      const url = task.url ?? `https://www.google.com/search?q=${encodeURIComponent(query)}`;
       const result = api
         ? task.profile
           ? await api.openUrlInProfile(url, 'chrome', task.profile)
           : await api.openUrl(url)
         : simulated(`Searching for "${query}"`);
-      next.last_command = `search ${query}`;
+      next.last_command = site ? `search ${query} on ${site.aliases[0]}` : `search ${query}`;
       return {
-        result: { ...result, appLabel: `"${query}"`, appIcon: 'google' },
-        response: result.success ? `Searched for "${query}".` : result.message,
+        result: { ...result, appLabel: `"${query}"`, appIcon: site?.icon ?? 'google' },
+        response: result.success ? `Searched ${site ? `${site.label} ` : ''}for "${query}".` : result.message,
         memory: next,
       };
     }

@@ -3,26 +3,22 @@
 import { useJarvisStore } from '@/lib/store';
 import { SettingsIcon } from './Icons';
 import type { View } from './Sidebar';
+import './views.css';
 
 export default function StatusBar({ onSelect }: { onSelect: (v: View) => void }) {
   const voiceEnabled = useJarvisStore((s) => s.voiceEnabled);
 
   return (
-    <footer className="flex items-center justify-between px-4 py-1.5 glass-panel border-t text-[11px]" style={{ color: 'var(--jarvis-subtext)' }}>
-      <span className="font-medium">JARVIS LITE v1.0.0</span>
+    <footer className="v-statusbar">
+      <span className="v-statusbar-l">Jarvis Lite <span className="tnum">1.0.0</span></span>
 
-      <div className="flex items-center gap-2">
-        <span>Status:</span>
-        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--jarvis-success)' }} />
-        <span style={{ color: 'var(--jarvis-text)' }}>Online</span>
-      </div>
-
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <span>Voice:</span>
-          <span style={{ color: voiceEnabled ? 'var(--jarvis-accent)' : 'var(--jarvis-subtext)' }}>{voiceEnabled ? 'ON' : 'OFF'}</span>
-        </div>
-        <button onClick={() => onSelect('settings')} aria-label="Settings" className="hover:text-jarvis-text">
+      <div className="v-statusbar-r">
+        <span className="chip good">
+          <i className="dot" />
+          Online
+        </span>
+        <span className={`chip${voiceEnabled ? ' on' : ''}`}>Voice {voiceEnabled ? 'on' : 'off'}</span>
+        <button onClick={() => onSelect('settings')} aria-label="Settings" title="Settings" className="btn ghost icon sm">
           <SettingsIcon width={15} height={15} />
         </button>
       </div>

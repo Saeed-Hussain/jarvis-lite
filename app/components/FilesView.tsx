@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { FolderIcon } from './Icons';
+import './views.css';
 
 export default function FilesView() {
   const [path, setPath] = useState('');
@@ -30,50 +31,55 @@ export default function FilesView() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-5 max-w-2xl">
-      <h2 className="text-[15px] font-semibold mb-1 flex items-center gap-2">
-        <FolderIcon width={18} height={18} /> Files &amp; Folders
-      </h2>
-      <p className="text-sm mb-4" style={{ color: 'var(--jarvis-subtext)' }}>
-        Create or open a file using Node&apos;s <code>fs</code> layer in the Electron main process.
-      </p>
+    <div className="v-page">
+      <div className="v-page-inner narrow">
+        <header className="v-head">
+          <div>
+            <h1>Files &amp; folders</h1>
+            <p className="sub">
+              Create or open a file using Node&apos;s <code className="mono">fs</code> layer in the Electron main process.
+            </p>
+          </div>
+        </header>
 
-      <div className="glass-panel rounded-lg p-3.5 flex flex-col gap-4">
-        <div>
-          <label className="text-xs font-medium" style={{ color: 'var(--jarvis-subtext)' }}>
-            File path
-          </label>
-          <input
-            value={path}
-            onChange={(e) => setPath(e.target.value)}
-            placeholder="e.g. notes.txt"
-            className="w-full mt-1 rounded-lg px-3 py-2 text-sm glass-panel outline-none"
-          />
-        </div>
-        <div>
-          <label className="text-xs font-medium" style={{ color: 'var(--jarvis-subtext)' }}>
-            Content (used when creating)
-          </label>
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            rows={4}
-            className="w-full mt-1 rounded-lg px-3 py-2 text-sm glass-panel outline-none resize-none"
-          />
-        </div>
-        <div className="flex gap-3">
-          <button onClick={handleCreate} className="px-3 py-1.5 rounded-md text-[12px] font-medium text-white" style={{ backgroundColor: 'var(--jarvis-accent)' }}>
-            Create File
-          </button>
-          <button onClick={handleOpen} className="px-3 py-1.5 rounded-md text-[12px] font-medium glass-panel">
-            Open File
-          </button>
-        </div>
-        {status && (
-          <p className="text-xs" style={{ color: 'var(--jarvis-subtext)' }}>
-            {status}
-          </p>
-        )}
+        <section className="glass v-card flex flex-col gap-4">
+          <h2 className="v-card-title">
+            <FolderIcon width={16} height={16} /> File
+          </h2>
+          <div>
+            <label className="v-field-label" htmlFor="files-path">
+              File path
+            </label>
+            <input
+              id="files-path"
+              value={path}
+              onChange={(e) => setPath(e.target.value)}
+              placeholder="e.g. notes.txt"
+              className="field"
+            />
+          </div>
+          <div>
+            <label className="v-field-label" htmlFor="files-content">
+              Content <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>· used when creating</span>
+            </label>
+            <textarea
+              id="files-content"
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              rows={5}
+              className="field"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={handleCreate} className="btn accent">
+              Create file
+            </button>
+            <button onClick={handleOpen} className="btn">
+              Open file
+            </button>
+          </div>
+          {status && <p className="v-caption">{status}</p>}
+        </section>
       </div>
     </div>
   );

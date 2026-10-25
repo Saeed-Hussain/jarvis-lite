@@ -3,6 +3,23 @@
 import { useState } from 'react';
 import { useMarkStore } from '@/lib/mark/store';
 import { markBridge } from '@/lib/mark/types';
+import {
+  ChevronRightIcon,
+  CoffeeIcon,
+  EarIcon,
+  ExpandIcon,
+  FaceIcon,
+  HeadphonesIcon,
+  MemoryIcon,
+  MicIcon,
+  PaletteIcon,
+  PhoneIcon,
+  PowerIcon,
+  PuzzleIcon,
+  SettingsIcon,
+  ShortcutIcon,
+  SparkIcon,
+} from '../Icons';
 
 /** The push-to-talk chord (core/hotkey.py DEFAULT_CHORD). */
 export const PTT_CHORD_LABEL = 'Ctrl+Space';
@@ -82,91 +99,114 @@ export default function QuickDrawer() {
   const face = (s.config?.hud_style || 'face') === 'face';
   const ptt = s.ptt.enabled;
 
-  let wakeLabel: string;
-  let wakeCls: string;
-  if (downloading) {
-    wakeLabel = '⬇  DOWNLOADING… (one-time)';
-    wakeCls = 'off';
-  } else if (!s.wake.ready) {
-    wakeLabel = '⬇  WAKE WORD: DOWNLOAD';
-    wakeCls = 'off';
-  } else if (s.wake.enabled) {
-    wakeLabel = '🎙  WAKE WORD: ON';
-    wakeCls = 'on';
-  } else {
-    wakeLabel = '🎙  WAKE WORD: OFF';
-    wakeCls = 'off';
-  }
+  const wakeOn = s.wake.ready && s.wake.enabled;
+  const wakeSub = downloading
+    ? 'Downloading the model (one time)…'
+    : !s.wake.ready
+      ? 'Download once (3.6 MB), then works offline'
+      : s.wake.enabled
+        ? 'Sleeps after 2 minutes of quiet'
+        : 'Say “Hey Jarvis” to wake it';
 
   return (
-    <div className="mk-drawer">
-      <div className="mk-drawer-hdr">◈ CONTROLS</div>
+    <div className="mk-drawer glass-strong" role="menu">
+      <Group title="Assistant">
+        <Row icon={<PaletteIcon />} label="Customise" sub="Name, your name, voice, colour" onClick={() => s.setOverlay('customize')} chevron />
+        <Row icon={<CoffeeIcon />} label="Morning briefing" sub="Greeting, yesterday’s recap and the news" onClick={() => s.toggleBrief()} on={brief} />
+        <div className="mk-row seg-row">
+          <span className="mk-row-ico"><FaceIcon /></span>
+          <span className="mk-row-text">
+            <b>Centrepiece</b>
+            <small>Pure taste — both cost the same</small>
+          </span>
+          <div className="mk-seg">
+            <button className={face ? 'on' : ''} onClick={() => !face && hudStyle()}>Face</button>
+            <button className={!face ? 'on' : ''} onClick={() => face && hudStyle()}>Core</button>
+          </div>
+        </div>
+      </Group>
 
-      <button className="mk-dbtn pri" onClick={remote}>
-        ◉  REMOTE CONTROL
-      </button>
-      <button className="mk-dbtn" onClick={toggleFullscreen}>
-        ⛶  FULLSCREEN  [F11]
-      </button>
-      <button className="mk-dbtn" onClick={shortcut}>
-        ⊞  CREATE DESKTOP SHORTCUT
-      </button>
-      <button className={`mk-dbtn ${s.autostart ? 'on' : 'off'}`} onClick={autostart}>
-        {s.autostart ? '◉  AUTO-START: ON' : '◉  AUTO-START: OFF'}
-      </button>
-      <button className="mk-dbtn" onClick={() => s.setOverlay('customize')}>
-        ⚙  CUSTOMISE ASSISTANT
-      </button>
-      <button className={`mk-dbtn ${brief ? 'on' : 'off'}`} onClick={() => s.toggleBrief()}>
-        {brief ? '☀  MORNING BRIEF: ON' : '☀  MORNING BRIEF: OFF'}
-      </button>
+      <Group title="Listening">
+        <Row
+          icon={<EarIcon />}
+          label="Wake word"
+          sub={wakeSub}
+          onClick={wakeToggle}
+          on={wakeOn}
+          disabled={downloading}
+          action={!s.wake.ready && !downloading ? 'Download' : undefined}
+        />
+        {!downloading && wakeOn && (
+          <Row icon={<SparkIcon />} label={s.wake.awake ? 'Sleep now' : 'Wake now'} sub="Without waiting for the timeout" onClick={() => s.wakeManual()} chevron />
+        )}
+        <Row
+          icon={<MicIcon />}
+          label="Push to talk"
+          sub={ptt ? `Hold ${PTT_CHORD_LABEL} — the mic is closed otherwise` : `Hold ${PTT_CHORD_LABEL} instead of an open mic`}
+          onClick={() => s.togglePushToTalk().catch((e) => log(`ERR: Push-to-talk failed — ${(e as Error)?.message || e}`))}
+          on={ptt}
+        />
+      </Group>
 
-      <button className={`mk-dbtn ${wakeCls}`} onClick={wakeToggle} disabled={downloading}>
-        {wakeLabel}
-      </button>
-      {!downloading && s.wake.ready && s.wake.enabled && (
-        <button className="mk-dbtn off" onClick={() => s.wakeManual()}>
-          {s.wake.awake ? '😴  SLEEP NOW' : '👂  WAKE NOW'}
-        </button>
-      )}
+      <Group title="Devices & data">
+        <Row icon={<HeadphonesIcon />} label="Audio devices" sub="Microphone and speakers" onClick={() => s.setOverlay('audio')} chevron />
+        <Row icon={<PhoneIcon />} label="Remote control" sub="Use it from your phone" onClick={remote} chevron />
+        <Row icon={<MemoryIcon />} label="Memory" sub="What it knows about you" onClick={() => s.setOverlay('memory')} chevron />
+        <Row icon={<PuzzleIcon />} label="Plugins" sub="Turn skills on and off" onClick={() => s.setOverlay('plugins')} chevron />
+        <Row icon={<SettingsIcon />} label="Plugin settings" sub="Tokens and connections" onClick={() => s.setOverlay('plugin-settings')} chevron />
+      </Group>
 
-      <button
-        className={`mk-dbtn ${ptt ? 'on' : 'off'}`}
-        onClick={() => s.togglePushToTalk().catch((e) => log(`ERR: Push-to-talk failed — ${(e as Error)?.message || e}`))}
-        title={
-          ptt
-            ? 'Microphone stays closed until you hold the key — nothing is sent while you are not holding it.'
-            : 'Hold a key to talk instead of streaming the mic continuously.'
-        }
-      >
-        {ptt ? `🎚  PUSH-TO-TALK: ${PTT_CHORD_LABEL}` : '🎚  PUSH-TO-TALK: OFF'}
-      </button>
-
-      {/* Neither side is "off": this is a choice between two things. */}
-      <button
-        className="mk-dbtn choice"
-        onClick={hudStyle}
-        title={
-          face
-            ? 'An animated head that speaks your words and shows what the assistant is doing. Tap to switch to the reactor core.'
-            : 'A reactor core that turns with the state and moves with your voice. Tap to switch to the animated head.'
-        }
-      >
-        {face ? '🧑  HUD: ANIMATED FACE' : '◉  HUD: REACTOR CORE'}
-      </button>
-
-      <button className="mk-dbtn" onClick={() => s.setOverlay('audio')}>
-        🎧  AUDIO DEVICES
-      </button>
-      <button className="mk-dbtn" onClick={() => s.setOverlay('memory')}>
-        🧠  MEMORY
-      </button>
-      <button className="mk-dbtn" onClick={() => s.setOverlay('plugins')}>
-        🧩  PLUGINS
-      </button>
-      <button className="mk-dbtn" onClick={() => s.setOverlay('plugin-settings')}>
-        ⚙  PLUGIN SETTINGS
-      </button>
+      <Group title="Window">
+        <Row icon={<ExpandIcon />} label="Fullscreen" sub="F11" onClick={toggleFullscreen} chevron />
+        <Row icon={<PowerIcon />} label="Start with Windows" sub="Opens quietly in the tray" onClick={autostart} on={s.autostart} />
+        <Row icon={<ShortcutIcon />} label="Desktop shortcut" sub="Create one on your desktop" onClick={shortcut} chevron />
+      </Group>
     </div>
+  );
+}
+
+function Group({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="mk-group">
+      <div className="label-caps">{title}</div>
+      <div className="mk-group-body">{children}</div>
+    </section>
+  );
+}
+
+function Row({
+  icon,
+  label,
+  sub,
+  onClick,
+  on,
+  chevron,
+  disabled,
+  action,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  sub?: string;
+  onClick(): void;
+  on?: boolean;
+  chevron?: boolean;
+  disabled?: boolean;
+  action?: string;
+}) {
+  return (
+    <button className="mk-row" onClick={onClick} disabled={disabled} role={on === undefined ? 'menuitem' : 'menuitemcheckbox'} aria-checked={on}>
+      <span className="mk-row-ico">{icon}</span>
+      <span className="mk-row-text">
+        <b>{label}</b>
+        {sub && <small>{sub}</small>}
+      </span>
+      {action ? (
+        <span className="chip mk-row-action">{action}</span>
+      ) : on !== undefined ? (
+        <span className={`switch${on ? ' on' : ''}`} />
+      ) : chevron ? (
+        <ChevronRightIcon width={16} height={16} className="mk-row-chev" />
+      ) : null}
+    </button>
   );
 }

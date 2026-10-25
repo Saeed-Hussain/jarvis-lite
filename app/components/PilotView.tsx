@@ -3,25 +3,23 @@
 import { useEffect, useMemo, useState } from 'react';
 import { usePilotStore } from '@/lib/pilot/store';
 import type { PilotStep, StepRun } from '@/lib/pilot/types';
-import { PilotIcon, RecordIcon, StopIcon, UndoIcon, ShieldIcon, PlayIcon, CheckIcon, ClockIcon } from './Icons';
+import { PilotIcon, RecordIcon, StopIcon, UndoIcon, ShieldIcon, PlayIcon, CheckIcon, ClockIcon, CloseIcon, ChevronRightIcon } from './Icons';
 import { formatTime } from '@/lib/utils';
+import './views.css';
 
 const STATUS_COLOR: Record<string, string> = {
-  done: 'var(--jarvis-success)',
-  running: 'var(--jarvis-accent)',
-  failed: 'var(--jarvis-danger)',
-  blocked: 'var(--jarvis-danger)',
-  stopped: 'var(--jarvis-danger)',
-  skipped: 'var(--jarvis-subtext)',
-  pending: 'var(--jarvis-subtext)',
+  done: 'var(--good)',
+  running: 'var(--accent-ink)',
+  failed: 'var(--bad)',
+  blocked: 'var(--bad)',
+  stopped: 'var(--bad)',
+  skipped: 'var(--ink-3)',
+  pending: 'var(--ink-3)',
 };
 
 function Pill({ tone, children }: { tone: string; children: React.ReactNode }) {
   return (
-    <span
-      className="px-2 py-0.5 rounded-full text-[11px] font-medium whitespace-nowrap"
-      style={{ backgroundColor: `color-mix(in srgb, ${tone} 18%, transparent)`, color: tone }}
-    >
+    <span className="v-pill" style={{ ['--tone' as string]: tone } as React.CSSProperties}>
       {children}
     </span>
   );
@@ -31,43 +29,37 @@ function Pill({ tone, children }: { tone: string; children: React.ReactNode }) {
 function Confidence({ value }: { value?: number }) {
   if (typeof value !== 'number') return null;
   const pct = Math.round(value * 100);
-  const tone = pct >= 70 ? 'var(--jarvis-success)' : pct >= 50 ? 'var(--jarvis-accent)' : 'var(--jarvis-danger)';
+  const tone = pct >= 70 ? 'var(--good)' : pct >= 50 ? 'var(--accent)' : 'var(--bad)';
   return (
-    <span className="inline-flex items-center gap-1.5">
-      <span className="w-10 h-1 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--jarvis-border)' }}>
-        <span className="block h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: tone }} />
+    <span className="v-meter" style={{ ['--tone' as string]: tone } as React.CSSProperties}>
+      <span className="v-meter-track">
+        <i style={{ width: `${pct}%` }} />
       </span>
-      <span className="font-mono text-[11px]" style={{ color: 'var(--jarvis-subtext)' }}>
-        {pct}%
-      </span>
+      <span className="v-mono">{pct}%</span>
     </span>
   );
 }
 
 function StepRow({ run }: { run: StepRun }) {
-  const tone = STATUS_COLOR[run.status] ?? 'var(--jarvis-subtext)';
+  const tone = STATUS_COLOR[run.status] ?? 'var(--ink-3)';
   return (
-    <div className="flex items-start gap-3 px-4 py-2.5 border-b last:border-0" style={{ borderColor: 'var(--jarvis-border)' }}>
-      <span className="font-mono text-[11px] w-6 shrink-0 pt-0.5" style={{ color: 'var(--jarvis-subtext)' }}>
+    <div className="v-row" style={{ alignItems: 'flex-start' }}>
+      <span className="v-num" style={{ paddingTop: 2 }}>
         {run.index + 1}
       </span>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm">{run.label}</p>
-        {run.message && (
-          <p className="text-xs mt-0.5" style={{ color: 'var(--jarvis-subtext)' }}>
-            {run.message}
-          </p>
-        )}
+      <div className="v-row-main">
+        <b style={{ fontWeight: 500 }}>{run.label}</b>
+        {run.message && <small>{run.message}</small>}
       </div>
       <div className="flex items-center gap-2.5 shrink-0 pt-0.5">
         <Confidence value={run.confidence} />
         {run.ms > 0 && (
-          <span className="font-mono text-[11px]" style={{ color: 'var(--jarvis-subtext)' }}>
+          <span className="v-mono">
             {run.ms}ms
             {typeof run.groundMs === 'number' && run.groundMs > 0 ? ` · find ${run.groundMs}ms` : ''}
           </span>
         )}
-        {(run.attempts ?? 1) > 1 && <Pill tone="var(--jarvis-accent)">retried</Pill>}
+        {(run.attempts ?? 1) > 1 && <Pill tone="var(--accent-ink)">retried</Pill>}
         <Pill tone={tone}>{run.status}</Pill>
       </div>
     </div>
@@ -100,12 +92,12 @@ function AddStep() {
           : 'the control to wait for';
 
   return (
-    <div className="flex gap-2 px-4 py-3 border-t" style={{ borderColor: 'var(--jarvis-border)' }}>
+    <div className="flex gap-2 px-[18px] py-3" style={{ borderTop: '1px solid var(--line)' }}>
       <select
         value={kind}
         onChange={(e) => setKind(e.target.value as PilotStep['kind'])}
-        className="text-xs rounded-lg px-2 py-1.5 border bg-transparent"
-        style={{ borderColor: 'var(--jarvis-border)', color: 'var(--jarvis-text)' }}
+        className="field sm"
+        style={{ width: 'auto' }}
       >
         <option value="type">Type</option>
         <option value="key">Press keys</option>
@@ -117,14 +109,9 @@ function AddStep() {
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && submit()}
         placeholder={placeholder}
-        className="flex-1 text-xs rounded-lg px-3 py-1.5 border bg-transparent"
-        style={{ borderColor: 'var(--jarvis-border)', color: 'var(--jarvis-text)' }}
+        className="field sm flex-1"
       />
-      <button
-        onClick={submit}
-        className="text-xs px-3 py-1.5 rounded-lg font-medium active:scale-[0.98]"
-        style={{ backgroundColor: 'var(--jarvis-accent)', color: '#fff' }}
-      >
+      <button onClick={submit} className="btn accent sm">
         Add
       </button>
     </div>
@@ -137,62 +124,58 @@ function RecordingPanel() {
   const [message, setMessage] = useState('');
 
   return (
-    <div className="glass-panel rounded-xl overflow-hidden">
-      <div className="px-4 py-3 border-b flex items-center gap-2" style={{ borderColor: 'var(--jarvis-border)' }}>
-        <span className="w-2 h-2 rounded-full animate-pulseRing" style={{ backgroundColor: 'var(--jarvis-danger)' }} />
-        <p className="text-sm font-semibold flex-1">Recording “{recorder?.name}”</p>
-        <button
-          onClick={cancelRecording}
-          className="text-xs px-3 py-1.5 rounded-lg border"
-          style={{ borderColor: 'var(--jarvis-border)' }}
-        >
+    <div className="glass v-card flush">
+      <div className="v-card-head">
+        <span className="v-rec-dot" />
+        <h2 className="v-card-title flex-1 min-w-0">
+          <span className="truncate">Recording “{recorder?.name}”</span>
+        </h2>
+        <button onClick={cancelRecording} className="btn ghost sm">
           Discard
         </button>
-        <button
-          onClick={async () => setMessage(await saveRecording())}
-          className="text-xs px-3 py-1.5 rounded-lg font-medium active:scale-[0.98]"
-          style={{ backgroundColor: 'var(--jarvis-success)', color: '#fff' }}
-        >
+        <button onClick={async () => setMessage(await saveRecording())} className="btn solid-good sm">
           Save workflow
         </button>
       </div>
 
-      <p className="px-4 py-2.5 text-xs border-b" style={{ color: 'var(--jarvis-subtext)', borderColor: 'var(--jarvis-border)' }}>
+      <p className="v-caption px-[18px] py-3" style={{ borderBottom: '1px solid var(--line)' }}>
         Go and do the task. Every click is recorded as the control you clicked, not as a coordinate, so it will replay
         after the window moves. Typing is not watched — add those steps below.
       </p>
 
       {recorderNote && (
-        <p className="px-4 py-2 text-xs border-b" style={{ color: 'var(--jarvis-danger)', borderColor: 'var(--jarvis-border)' }}>
+        <p className="v-caption px-[18px] py-2.5" style={{ color: 'var(--bad)', borderBottom: '1px solid var(--line)' }}>
           {recorderNote}
         </p>
       )}
 
       {recordedSteps.length === 0 ? (
-        <p className="px-4 py-6 text-sm text-center" style={{ color: 'var(--jarvis-subtext)' }}>
-          No steps yet — click something.
-        </p>
+        <p className="v-empty">No steps yet — click something.</p>
       ) : (
-        recordedSteps.map((step, i) => (
-          <div key={step.id} className="flex items-center gap-3 px-4 py-2 border-b last:border-0" style={{ borderColor: 'var(--jarvis-border)' }}>
-            <span className="font-mono text-[11px] w-6" style={{ color: 'var(--jarvis-subtext)' }}>{i + 1}</span>
-            <p className="text-sm flex-1 min-w-0 truncate">{step.label}</p>
-            <button onClick={() => moveRecordedStep(step.id, -1)} className="text-xs px-1.5 opacity-60 hover:opacity-100">↑</button>
-            <button onClick={() => moveRecordedStep(step.id, 1)} className="text-xs px-1.5 opacity-60 hover:opacity-100">↓</button>
-            <button
-              onClick={() => removeRecordedStep(step.id)}
-              className="text-xs px-1.5 opacity-60 hover:opacity-100"
-              style={{ color: 'var(--jarvis-danger)' }}
-            >
-              ✕
-            </button>
-          </div>
-        ))
+        <div className="v-list bare">
+          {recordedSteps.map((step, i) => (
+            <div key={step.id} className="v-row" style={{ minHeight: 40, paddingTop: 6, paddingBottom: 6 }}>
+              <span className="v-num">{i + 1}</span>
+              <p className="flex-1 min-w-0 truncate" style={{ margin: 0 }}>
+                {step.label}
+              </p>
+              <button onClick={() => moveRecordedStep(step.id, -1)} className="v-icon-btn" aria-label="Move up" title="Move up">
+                <ChevronRightIcon width={14} height={14} style={{ transform: 'rotate(-90deg)' }} />
+              </button>
+              <button onClick={() => moveRecordedStep(step.id, 1)} className="v-icon-btn" aria-label="Move down" title="Move down">
+                <ChevronRightIcon width={14} height={14} style={{ transform: 'rotate(90deg)' }} />
+              </button>
+              <button onClick={() => removeRecordedStep(step.id)} className="v-icon-btn bad" aria-label="Remove step" title="Remove">
+                <CloseIcon width={14} height={14} />
+              </button>
+            </div>
+          ))}
+        </div>
       )}
 
       <AddStep />
       {message && (
-        <p className="px-4 py-2 text-xs border-t" style={{ color: 'var(--jarvis-subtext)', borderColor: 'var(--jarvis-border)' }}>
+        <p className="v-caption px-[18px] py-2.5" style={{ borderTop: '1px solid var(--line)' }}>
           {message}
         </p>
       )}
@@ -236,76 +219,71 @@ export default function PilotView() {
   const awaiting = report?.status === 'awaiting-approval';
 
   return (
-    <div className="flex-1 overflow-y-auto p-5">
-      <div className="flex items-start gap-3 mb-1">
-        <PilotIcon width={20} height={20} style={{ color: 'var(--jarvis-accent)' }} />
-        <div className="flex-1">
-          <h2 className="text-[15px] font-semibold">Pilot</h2>
-          <p className="text-sm" style={{ color: 'var(--jarvis-subtext)' }}>
-            Jarvis follows rules. Pilot looks at the screen: it reads the accessibility tree of whatever is in front,
-            finds the control you named, and clicks it. Record a task once, replay it with no model in the loop.
-          </p>
-        </div>
-      </div>
+    <div className="v-page">
+      <div className="v-page-inner">
+        <header className="v-head">
+          <div>
+            <h1 className="flex items-center gap-2.5">
+              Pilot
+              <PilotIcon width={20} height={20} style={{ color: 'var(--accent-ink)' }} />
+            </h1>
+            <p className="sub">
+              Jarvis follows rules. Pilot looks at the screen: it reads the accessibility tree of whatever is in front,
+              finds the control you named, and clicks it. Record a task once, replay it with no model in the loop.
+            </p>
+          </div>
+        </header>
 
-      {/* --- availability ---------------------------------------------- */}
-      {checked && !available && (
-        <div className="glass-panel rounded-xl px-4 py-3 mt-4 text-sm" style={{ color: 'var(--jarvis-subtext)' }}>
-          <span style={{ color: 'var(--jarvis-danger)' }}>Pilot is not available here. </span>
-          {reason}
-        </div>
-      )}
+        {/* --- availability ---------------------------------------------- */}
+        {checked && !available && (
+          <div className="glass v-card" style={{ padding: '14px 18px' }}>
+            <p className="v-caption" style={{ color: 'var(--ink-2)' }}>
+              <span style={{ color: 'var(--bad)', fontWeight: 580 }}>Pilot is not available here. </span>
+              {reason}
+            </p>
+          </div>
+        )}
 
-      {/* --- the stop control ------------------------------------------- */}
-      {(running || awaiting) && (
-        <div
-          className="rounded-xl px-4 py-3 mt-4 flex items-center gap-3"
-          style={{ backgroundColor: 'color-mix(in srgb, var(--jarvis-danger) 12%, transparent)' }}
-        >
-          <button
-            onClick={stop}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm active:scale-[0.98]"
-            style={{ backgroundColor: 'var(--jarvis-danger)', color: '#fff' }}
-          >
-            <StopIcon width={14} height={14} />
-            Stop
-          </button>
-          <p className="text-xs flex-1" style={{ color: 'var(--jarvis-subtext)' }}>
-            {stopShortcut
-              ? `Pilot has the mouse while it runs — ${stopShortcut} stops it from anywhere, even when this window isn't focused.`
-              : 'The global stop shortcut is taken by another app, so this button is the only stop. Keep this window reachable.'}
-          </p>
-        </div>
-      )}
+        {/* --- the stop control ------------------------------------------- */}
+        {(running || awaiting) && (
+          <div className="v-banner">
+            <button onClick={stop} className="btn solid-bad">
+              <StopIcon width={14} height={14} />
+              Stop
+            </button>
+            <p className="v-caption flex-1" style={{ color: 'var(--ink-2)' }}>
+              {stopShortcut
+                ? `Pilot has the mouse while it runs — ${stopShortcut} stops it from anywhere, even when this window isn't focused.`
+                : 'The global stop shortcut is taken by another app, so this button is the only stop. Keep this window reachable.'}
+            </p>
+          </div>
+        )}
 
-      {/* --- approval --------------------------------------------------- */}
-      {awaiting && report?.pendingApproval && (
-        <div className="glass-panel rounded-xl px-4 py-3 mt-3 flex items-center gap-3">
-          <ShieldIcon width={18} height={18} style={{ color: 'var(--jarvis-accent)' }} />
-          <p className="text-sm flex-1">{report.pendingApproval.question}</p>
-          <button
-            onClick={approve}
-            className="text-xs px-3 py-1.5 rounded-lg font-medium"
-            style={{ backgroundColor: 'var(--jarvis-accent)', color: '#fff' }}
-          >
-            Yes, go ahead
-          </button>
-        </div>
-      )}
+        {/* --- approval --------------------------------------------------- */}
+        {awaiting && report?.pendingApproval && (
+          <div className="glass v-card flex items-center gap-3" style={{ padding: '12px 14px 12px 18px' }}>
+            <ShieldIcon width={18} height={18} style={{ color: 'var(--accent-ink)', flex: 'none' }} />
+            <p className="flex-1" style={{ margin: 0, fontSize: 13.5 }}>
+              {report.pendingApproval.question}
+            </p>
+            <button onClick={approve} className="btn accent sm">
+              Yes, go ahead
+            </button>
+          </div>
+        )}
 
-      {/* --- record ------------------------------------------------------ */}
-      <div className="mt-4">
+        {/* --- record ------------------------------------------------------ */}
         {recorder ? (
           <RecordingPanel />
         ) : (
-          <div className="glass-panel rounded-xl px-4 py-3 flex items-center gap-2">
+          <div className="glass v-card flex items-center gap-2" style={{ padding: 10, borderRadius: 999 }}>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && available && name.trim() && (startRecording(name), setName(''))}
               placeholder="Name a new workflow, e.g. “enter one invoice”"
-              className="flex-1 text-sm rounded-lg px-3 py-2 border bg-transparent"
-              style={{ borderColor: 'var(--jarvis-border)', color: 'var(--jarvis-text)' }}
+              className="field flex-1"
+              style={{ borderRadius: 999 }}
             />
             <button
               disabled={!available || !name.trim()}
@@ -313,207 +291,187 @@ export default function PilotView() {
                 startRecording(name);
                 setName('');
               }}
-              className="flex items-center gap-2 text-sm px-4 py-2 rounded-lg font-medium disabled:opacity-40 active:scale-[0.98]"
-              style={{ backgroundColor: 'var(--jarvis-danger)', color: '#fff' }}
+              className="btn solid-bad"
             >
               <RecordIcon width={14} height={14} />
               Record
             </button>
           </div>
         )}
-      </div>
 
-      {/* --- saved workflows --------------------------------------------- */}
-      <div className="grid grid-cols-[260px_1fr] gap-4 mt-4 items-start">
-        <div className="glass-panel rounded-xl overflow-hidden">
-          <p className="px-4 py-2.5 text-xs font-semibold border-b" style={{ borderColor: 'var(--jarvis-border)', color: 'var(--jarvis-subtext)' }}>
-            SAVED WORKFLOWS
-          </p>
-          {workflows.length === 0 ? (
-            <p className="px-4 py-5 text-sm" style={{ color: 'var(--jarvis-subtext)' }}>
-              None yet.
-            </p>
-          ) : (
-            workflows.map((w) => (
-              <button
-                key={w.id}
-                onClick={() => select(w.id)}
-                className="w-full text-left px-4 py-2.5 border-b last:border-0 hover:bg-black/5 dark:hover:bg-white/5"
-                style={{
-                  borderColor: 'var(--jarvis-border)',
-                  backgroundColor: selectedId === w.id ? 'color-mix(in srgb, var(--jarvis-accent) 12%, transparent)' : undefined,
-                }}
-              >
-                <p className="text-sm font-medium truncate">{w.name}</p>
-                <p className="text-xs" style={{ color: 'var(--jarvis-subtext)' }}>
-                  {w.steps.length} steps
-                  {w.app ? ` · ${w.app}` : ''}
-                  {w.lastRun ? ` · last ${(w.lastRun.ms / 1000).toFixed(1)}s` : ''}
+        {/* --- saved workflows --------------------------------------------- */}
+        <div className="v-pilot-split">
+          <div className="glass v-card flush">
+            <div className="v-card-head">
+              <h2 className="v-card-title">Saved workflows</h2>
+              <span className="v-mono">{workflows.length}</span>
+            </div>
+            {workflows.length === 0 ? (
+              <p className="v-empty">None yet.</p>
+            ) : (
+              <div className="v-list bare">
+                {workflows.map((w) => (
+                  <button key={w.id} onClick={() => select(w.id)} className={`v-row${selectedId === w.id ? ' selected' : ''}`}>
+                    <span className="v-row-main">
+                      <b className="truncate">{w.name}</b>
+                      <small>
+                        {w.steps.length} steps
+                        {w.app ? ` · ${w.app}` : ''}
+                        {w.lastRun ? ` · last ${(w.lastRun.ms / 1000).toFixed(1)}s` : ''}
+                      </small>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="min-w-0 flex flex-col gap-3.5">
+            {!selected ? (
+              <div className="glass v-card">
+                <p className="v-caption">
+                  Pick a workflow to preview or run it. You can also say “pilot run {workflows[0]?.name ?? 'invoices'}” in chat.
                 </p>
-              </button>
-            ))
-          )}
+              </div>
+            ) : (
+              <>
+                <div className="glass v-card flex items-center gap-2" style={{ padding: '12px 12px 12px 18px' }}>
+                  <div className="flex-1 min-w-0">
+                    <p className="v-card-title truncate">{selected.name}</p>
+                    <p className="v-card-sub">
+                      {selected.steps.length} steps · run {selected.runCount ?? 0}×
+                    </p>
+                  </div>
+                  <button disabled={busy} onClick={() => preview(selected.id)} className="btn sm">
+                    <ShieldIcon width={14} height={14} />
+                    Dry run
+                  </button>
+                  <button disabled={busy || !available} onClick={() => run(selected.id)} className="btn accent sm">
+                    <PlayIcon width={14} height={14} />
+                    Run
+                  </button>
+                  <button onClick={() => remove(selected.id)} className="btn ghost danger sm">
+                    Delete
+                  </button>
+                </div>
+
+                {/* --- dry run ------------------------------------------- */}
+                {dry && dry.workflowId === selected.id && (
+                  <div className="glass v-card flush">
+                    <div className="v-card-head">
+                      <div>
+                        <h3 className="v-card-title">The plan — nothing was done</h3>
+                        <p className="v-card-sub">
+                          Checked against “{dry.window || 'the foreground window'}” in {dry.ms}ms.
+                          {!dry.runnable && <span style={{ color: 'var(--bad)' }}> A step is blocked outright.</span>}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="v-list bare">
+                      {dry.rows.map((row) => (
+                        <div key={row.index} className="v-row" style={{ alignItems: 'flex-start' }}>
+                          <span className="v-num" style={{ paddingTop: 2 }}>
+                            {row.index + 1}
+                          </span>
+                          <div className="v-row-main">
+                            <b style={{ fontWeight: 500 }}>{row.label}</b>
+                            {(row.reason || row.detail) && <small>{row.reason ?? row.detail}</small>}
+                          </div>
+                          <Confidence value={row.confidence} />
+                          {row.found === true && <Pill tone="var(--good)">on screen</Pill>}
+                          {row.found === false && <Pill tone="var(--bad)">not found</Pill>}
+                          {row.verdict !== 'allow' && (
+                            <Pill tone={row.verdict === 'block' ? 'var(--bad)' : 'var(--accent-ink)'}>
+                              {row.verdict === 'block' ? 'blocked' : 'needs a yes'}
+                            </Pill>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* --- live run ------------------------------------------ */}
+                {report && report.workflowId === selected.id && (
+                  <div className="glass v-card flush">
+                    <div className="v-card-head">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="v-card-title">Run</h3>
+                        <p className="v-card-sub tnum">
+                          {report.steps.filter((s) => s.status === 'done').length}/{selected.steps.length} steps ·{' '}
+                          {(report.ms / 1000).toFixed(1)}s
+                          {report.steps.some((s) => s.status === 'done') &&
+                            ` · ${Math.round(report.ms / Math.max(1, report.steps.filter((s) => s.status === 'done').length))}ms a step`}
+                        </p>
+                      </div>
+                      <Pill tone={STATUS_COLOR[report.status] ?? 'var(--accent-ink)'}>{report.status}</Pill>
+                    </div>
+                    <div className="v-list bare">
+                      {report.steps.map((s) => (
+                        <StepRow key={`${s.stepId}-${s.index}`} run={s} />
+                      ))}
+                    </div>
+                    {report.message && (
+                      <p className="v-caption px-[18px] py-2.5" style={{ borderTop: '1px solid var(--line)' }}>
+                        {report.message}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
 
-        <div className="min-w-0">
-          {!selected ? (
-            <div className="glass-panel rounded-xl px-4 py-6 text-sm" style={{ color: 'var(--jarvis-subtext)' }}>
-              Pick a workflow to preview or run it. You can also say “pilot run {workflows[0]?.name ?? 'invoices'}” in chat.
-            </div>
+        {/* --- undo journal ------------------------------------------------ */}
+        <div className="glass v-card flush">
+          <div className="v-card-head">
+            <h2 className="v-card-title flex-1">
+              <UndoIcon width={16} height={16} /> Undo journal
+            </h2>
+            {report?.runId && journal.some((e) => e.runId === report.runId && !e.undone) && (
+              <button onClick={async () => setUndoNote(await undoRun(report.runId))} className="btn sm">
+                Undo this run
+              </button>
+            )}
+          </div>
+          {journal.length === 0 ? (
+            <p className="v-empty">Pilot has not changed any files. Every file it touches is backed up first and listed here.</p>
           ) : (
-            <>
-              <div className="glass-panel rounded-xl px-4 py-3 flex items-center gap-2">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold truncate">{selected.name}</p>
-                  <p className="text-xs" style={{ color: 'var(--jarvis-subtext)' }}>
-                    {selected.steps.length} steps · run {selected.runCount ?? 0}×
+            <div className="v-list bare">
+              {journal.map((entry) => (
+                <div key={entry.id} className="v-row" style={{ minHeight: 40 }}>
+                  <ClockIcon width={14} height={14} style={{ color: 'var(--ink-3)', flex: 'none' }} />
+                  <span className="v-mono">{formatTime(new Date(entry.at))}</span>
+                  <Pill tone="var(--accent-ink)">{entry.op}</Pill>
+                  <p className="v-mono flex-1 truncate" style={{ margin: 0, color: 'var(--ink-2)' }}>
+                    {entry.target}
                   </p>
-                </div>
-                <button
-                  disabled={busy}
-                  onClick={() => preview(selected.id)}
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border disabled:opacity-40"
-                  style={{ borderColor: 'var(--jarvis-border)' }}
-                >
-                  <ShieldIcon width={13} height={13} />
-                  Dry run
-                </button>
-                <button
-                  disabled={busy || !available}
-                  onClick={() => run(selected.id)}
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium disabled:opacity-40"
-                  style={{ backgroundColor: 'var(--jarvis-accent)', color: '#fff' }}
-                >
-                  <PlayIcon width={13} height={13} />
-                  Run
-                </button>
-                <button
-                  onClick={() => remove(selected.id)}
-                  className="text-xs px-2 py-1.5 rounded-lg"
-                  style={{ color: 'var(--jarvis-danger)' }}
-                >
-                  Delete
-                </button>
-              </div>
-
-              {/* --- dry run ------------------------------------------- */}
-              {dry && dry.workflowId === selected.id && (
-                <div className="glass-panel rounded-xl overflow-hidden mt-3">
-                  <div className="px-4 py-2.5 border-b" style={{ borderColor: 'var(--jarvis-border)' }}>
-                    <p className="text-xs font-semibold" style={{ color: 'var(--jarvis-subtext)' }}>
-                      THE PLAN — NOTHING WAS DONE
-                    </p>
-                    <p className="text-xs mt-0.5" style={{ color: 'var(--jarvis-subtext)' }}>
-                      Checked against “{dry.window || 'the foreground window'}” in {dry.ms}ms.
-                      {!dry.runnable && <span style={{ color: 'var(--jarvis-danger)' }}> A step is blocked outright.</span>}
-                    </p>
-                  </div>
-                  {dry.rows.map((row) => (
-                    <div key={row.index} className="flex items-start gap-3 px-4 py-2 border-b last:border-0" style={{ borderColor: 'var(--jarvis-border)' }}>
-                      <span className="font-mono text-[11px] w-6 pt-0.5" style={{ color: 'var(--jarvis-subtext)' }}>{row.index + 1}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm">{row.label}</p>
-                        {(row.reason || row.detail) && (
-                          <p className="text-xs mt-0.5" style={{ color: 'var(--jarvis-subtext)' }}>
-                            {row.reason ?? row.detail}
-                          </p>
-                        )}
-                      </div>
-                      <Confidence value={row.confidence} />
-                      {row.found === true && <Pill tone="var(--jarvis-success)">on screen</Pill>}
-                      {row.found === false && <Pill tone="var(--jarvis-danger)">not found</Pill>}
-                      {row.verdict !== 'allow' && (
-                        <Pill tone={row.verdict === 'block' ? 'var(--jarvis-danger)' : 'var(--jarvis-accent)'}>
-                          {row.verdict === 'block' ? 'blocked' : 'needs a yes'}
-                        </Pill>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* --- live run ------------------------------------------ */}
-              {report && report.workflowId === selected.id && (
-                <div className="glass-panel rounded-xl overflow-hidden mt-3">
-                  <div className="px-4 py-2.5 border-b flex items-center gap-2" style={{ borderColor: 'var(--jarvis-border)' }}>
-                    <p className="text-xs font-semibold flex-1" style={{ color: 'var(--jarvis-subtext)' }}>
-                      RUN · {report.steps.filter((s) => s.status === 'done').length}/{selected.steps.length} steps ·{' '}
-                      {(report.ms / 1000).toFixed(1)}s
-                      {report.steps.some((s) => s.status === 'done') &&
-                        ` · ${Math.round(report.ms / Math.max(1, report.steps.filter((s) => s.status === 'done').length))}ms a step`}
-                    </p>
-                    <Pill tone={STATUS_COLOR[report.status] ?? 'var(--jarvis-accent)'}>{report.status}</Pill>
-                  </div>
-                  {report.steps.map((s) => (
-                    <StepRow key={`${s.stepId}-${s.index}`} run={s} />
-                  ))}
-                  {report.message && (
-                    <p className="px-4 py-2.5 text-xs border-t" style={{ borderColor: 'var(--jarvis-border)', color: 'var(--jarvis-subtext)' }}>
-                      {report.message}
-                    </p>
+                  {entry.undone && (
+                    <span className="flex items-center gap-1 text-[12px]" style={{ color: 'var(--good)' }}>
+                      <CheckIcon width={12} height={12} /> undone
+                    </span>
                   )}
                 </div>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* --- undo journal ------------------------------------------------ */}
-      <div className="glass-panel rounded-xl overflow-hidden mt-4">
-        <div className="px-4 py-2.5 border-b flex items-center gap-2" style={{ borderColor: 'var(--jarvis-border)' }}>
-          <UndoIcon width={14} height={14} style={{ color: 'var(--jarvis-subtext)' }} />
-          <p className="text-xs font-semibold flex-1" style={{ color: 'var(--jarvis-subtext)' }}>
-            UNDO JOURNAL
-          </p>
-          {report?.runId && journal.some((e) => e.runId === report.runId && !e.undone) && (
-            <button
-              onClick={async () => setUndoNote(await undoRun(report.runId))}
-              className="text-xs px-3 py-1 rounded-lg border"
-              style={{ borderColor: 'var(--jarvis-border)' }}
-            >
-              Undo this run
-            </button>
-          )}
-        </div>
-        {journal.length === 0 ? (
-          <p className="px-4 py-4 text-sm" style={{ color: 'var(--jarvis-subtext)' }}>
-            Pilot has not changed any files. Every file it touches is backed up first and listed here.
-          </p>
-        ) : (
-          journal.map((entry) => (
-            <div key={entry.id} className="flex items-center gap-3 px-4 py-2 border-b last:border-0" style={{ borderColor: 'var(--jarvis-border)' }}>
-              <ClockIcon width={13} height={13} style={{ color: 'var(--jarvis-subtext)' }} />
-              <span className="font-mono text-[11px]" style={{ color: 'var(--jarvis-subtext)' }}>
-                {formatTime(new Date(entry.at))}
-              </span>
-              <Pill tone="var(--jarvis-accent)">{entry.op}</Pill>
-              <p className="text-xs flex-1 truncate font-mono" style={{ color: 'var(--jarvis-subtext)' }}>
-                {entry.target}
-              </p>
-              {entry.undone && (
-                <span className="flex items-center gap-1 text-[11px]" style={{ color: 'var(--jarvis-success)' }}>
-                  <CheckIcon width={12} height={12} /> undone
-                </span>
-              )}
+              ))}
             </div>
-          ))
-        )}
-        {undoNote && (
-          <p className="px-4 py-2 text-xs border-t" style={{ borderColor: 'var(--jarvis-border)', color: 'var(--jarvis-subtext)' }}>
-            {undoNote}
-          </p>
-        )}
-      </div>
+          )}
+          {undoNote && (
+            <p className="v-caption px-[18px] py-2.5" style={{ borderTop: '1px solid var(--line)' }}>
+              {undoNote}
+            </p>
+          )}
+        </div>
 
-      {/* --- what this does not do yet ------------------------------------ */}
-      <p className="text-xs mt-4 leading-relaxed" style={{ color: 'var(--jarvis-subtext)' }}>
-        <strong style={{ color: 'var(--jarvis-text)' }}>What this can&apos;t do yet.</strong> Pilot grounds through the
-        accessibility tree, which is fast and exact when an app exposes one. An app that draws its own interface — a
-        canvas, a remote desktop, a game — reports nothing addressable, and Pilot says so and stops rather than guessing
-        at a coordinate. Answering those cases needs a small vision model running locally on your own GPU, under a
-        second per step. That is the open problem, and it is not built.
-      </p>
+        {/* --- what this does not do yet ------------------------------------ */}
+        <p className="v-caption" style={{ padding: '0 4px', lineHeight: 1.6 }}>
+          <strong>What this can&apos;t do yet.</strong> Pilot grounds through the accessibility tree, which is fast and
+          exact when an app exposes one. An app that draws its own interface — a canvas, a remote desktop, a game —
+          reports nothing addressable, and Pilot says so and stops rather than guessing at a coordinate. Answering those
+          cases needs a small vision model running locally on your own GPU, under a second per step. That is the open
+          problem, and it is not built.
+        </p>
+      </div>
     </div>
   );
 }

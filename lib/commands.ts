@@ -21,14 +21,18 @@ export const KNOWN_APPS: AppDef[] = [
   { key: 'edge', label: 'Microsoft Edge', icon: 'chrome', aliases: ['edge', 'microsoft edge'] },
   { key: 'vscode', label: 'VS Code', icon: 'vscode', aliases: ['vs code', 'vscode', 'code editor', 'visual studio code'] },
   { key: 'notepad', label: 'Notepad', icon: 'notepad', aliases: ['notepad', 'text editor', 'notes'] },
-  { key: 'explorer', label: 'File Explorer', icon: 'folder', aliases: ['file explorer', 'explorer', 'files'] },
+  { key: 'explorer', label: 'File Explorer', icon: 'folder', aliases: ['file explorer', 'explorer', 'files', 'this pc', 'my computer'] },
+  { key: 'recyclebin', label: 'Recycle Bin', icon: 'folder', aliases: ['recycle bin', 'trash', 'bin'] },
   { key: 'calculator', label: 'Calculator', icon: 'calculator', aliases: ['calculator', 'calc'] },
   { key: 'cmd', label: 'Command Prompt', icon: 'terminal', aliases: ['cmd', 'command prompt', 'console'] },
   { key: 'powershell', label: 'PowerShell', icon: 'terminal', aliases: ['powershell', 'power shell'] },
   { key: 'terminal', label: 'Terminal', icon: 'terminal', aliases: ['terminal'] },
   { key: 'taskmanager', label: 'Task Manager', icon: 'system', aliases: ['task manager', 'taskmanager'] },
   { key: 'controlpanel', label: 'Control Panel', icon: 'settings', aliases: ['control panel', 'controlpanel'] },
-  { key: 'settingsapp', label: 'Settings', icon: 'settings', aliases: ['windows settings', 'system settings'] },
+  { key: 'settingsapp', label: 'Settings', icon: 'settings', aliases: ['settings', 'windows settings', 'system settings'] },
+  { key: 'clock', label: 'Clock', icon: 'system', aliases: ['clock', 'alarm', 'alarms', 'timer', 'stopwatch'] },
+  { key: 'snippingtool', label: 'Snipping Tool', icon: 'apps', aliases: ['snipping tool', 'screenshot', 'screen snip', 'snip'] },
+  { key: 'store', label: 'Microsoft Store', icon: 'apps', aliases: ['microsoft store', 'app store', 'windows store'] },
   { key: 'paint', label: 'Paint', icon: 'notepad', aliases: ['paint', 'ms paint', 'mspaint'] },
   { key: 'word', label: 'Microsoft Word', icon: 'notepad', aliases: ['word', 'microsoft word', 'ms word'] },
   { key: 'excel', label: 'Microsoft Excel', icon: 'notepad', aliases: ['excel', 'microsoft excel', 'ms excel'] },
@@ -85,6 +89,22 @@ export const KNOWN_SITES: SiteDef[] = [
   { key: 'whatsappweb', label: 'WhatsApp Web', url: 'https://web.whatsapp.com', icon: 'apps', aliases: ['whatsapp web', 'web whatsapp', 'whatsapp online'] },
   { key: 'webmail', label: 'Outlook Web', url: 'https://outlook.live.com', icon: 'mail', aliases: ['outlook web', 'hotmail'] },
 ];
+
+/**
+ * Sites with their own search, keyed like KNOWN_SITES. "search lofi on
+ * youtube" should land on YouTube's results, not a Google page about them.
+ */
+export const SITE_SEARCH: Record<string, string> = {
+  youtube: 'https://www.youtube.com/results?search_query=',
+  github: 'https://github.com/search?q=',
+  amazon: 'https://www.amazon.com/s?k=',
+  wikipedia: 'https://en.wikipedia.org/w/index.php?search=',
+  reddit: 'https://www.reddit.com/search/?q=',
+  maps: 'https://www.google.com/maps/search/',
+  stackoverflow: 'https://stackoverflow.com/search?q=',
+  twitter: 'https://x.com/search?q=',
+  google: 'https://www.google.com/search?q=',
+};
 
 /**
  * Browser keys that accept a named profile, mapped to the CLI flag used to

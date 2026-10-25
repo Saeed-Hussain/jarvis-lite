@@ -4,15 +4,16 @@ import { useEffect, useState } from 'react';
 import { useJarvisStore } from '@/lib/store';
 import { useVoiceStore } from '@/lib/voice/store';
 import { MicIcon, SendIcon } from './Icons';
+import './views.css';
 
-/** What the mic button looks like in each listener state. */
+/** The level meter takes the colour of the listener state. */
 const TONE: Record<string, string> = {
-  off: 'var(--jarvis-accent)',
-  loading: 'var(--jarvis-subtext)',
-  armed: 'var(--jarvis-accent-2)',
-  listening: 'var(--jarvis-danger)',
-  thinking: 'var(--jarvis-subtext)',
-  error: 'var(--jarvis-danger)',
+  off: 'var(--accent)',
+  loading: 'var(--ink-3)',
+  armed: 'var(--good)',
+  listening: 'var(--bad)',
+  thinking: 'var(--ink-3)',
+  error: 'var(--bad)',
 };
 
 export default function InputBar() {
@@ -63,56 +64,44 @@ export default function InputBar() {
                 : '';
 
   return (
-    <div className="px-4 py-3 glass-panel border-t">
+    <div className="v-composer-wrap">
       {note && (
-        <div className="flex items-center gap-2 mb-2 px-1">
+        <div className={`v-composer-note${voice.status === 'error' ? ' err' : ''}`}>
           {/* A live level meter, so "is it hearing me?" has a visible answer. */}
           {(voice.status === 'armed' || voice.status === 'listening') && (
-            <span className="w-12 h-1 rounded-full overflow-hidden shrink-0" style={{ backgroundColor: 'var(--jarvis-border)' }}>
-              <span
-                className="block h-full rounded-full transition-all duration-75"
-                style={{ width: `${Math.round(voice.level * 100)}%`, backgroundColor: TONE[voice.status] }}
+            <span className="v-level">
+              <i
+                style={{ width: `${Math.round(voice.level * 100)}%`, ['--tone' as string]: TONE[voice.status] } as React.CSSProperties}
               />
             </span>
           )}
-          <p
-            className="text-xs truncate"
-            style={{ color: voice.status === 'error' ? 'var(--jarvis-danger)' : 'var(--jarvis-subtext)' }}
-          >
+          <p>
             {note}
             {voice.status === 'loading' && voice.percent > 0 ? ` (${voice.percent}%)` : ''}
           </p>
         </div>
       )}
 
-      <div className="flex items-center gap-2">
+      <div className="v-composer">
         <input
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-          placeholder="Type a command..."
-          className="flex-1 rounded-lg px-3 py-2.5 text-[13px] outline-none glass-panel focus:ring-2"
-          style={{ ['--tw-ring-color' as string]: 'var(--jarvis-accent)' } as React.CSSProperties}
+          placeholder="Type a command…"
+          className="v-input"
         />
         <button
           onClick={handleMic}
           aria-label="Toggle microphone"
           title={wakeEnabled ? 'Listening for “Jarvis” — click to speak now' : 'Click to speak'}
-          className="w-10 h-10 rounded-lg flex items-center justify-center text-white shrink-0 relative"
-          style={{ backgroundColor: TONE[voice.status] ?? 'var(--jarvis-accent)' }}
+          className="v-mic"
+          data-s={voice.status}
         >
-          {voice.status === 'listening' && (
-            <span className="absolute inset-0 rounded-lg animate-pulseRing" style={{ border: '2px solid var(--jarvis-danger)' }} />
-          )}
-          <MicIcon width={16} height={16} />
+          {voice.status === 'listening' && <span className="v-mic-ring" />}
+          <MicIcon width={17} height={17} />
         </button>
-        <button
-          onClick={handleSend}
-          aria-label="Send message"
-          className="w-10 h-10 rounded-lg flex items-center justify-center text-white shrink-0"
-          style={{ backgroundColor: 'var(--jarvis-accent)' }}
-        >
-          <SendIcon width={15} height={15} />
+        <button onClick={handleSend} aria-label="Send message" className="v-send">
+          <SendIcon width={16} height={16} />
         </button>
       </div>
     </div>

@@ -7,7 +7,7 @@
  */
 
 import { normalize, splitSteps, stripWakeWord, extractSlots, extractPathQuery, Slots } from './nlu';
-import { KNOWN_APPS, KNOWN_SITES, looksLikeDomain } from './commands';
+import { KNOWN_APPS, KNOWN_SITES, SITE_SEARCH, looksLikeDomain } from './commands';
 import type { JarvisMemory, Task, TaskKind, Plan } from './types';
 import { uid } from './utils';
 
@@ -84,11 +84,21 @@ function planStep(step: string, slots: Slots, memory: JarvisMemory): Task[] {
   // messaging intent is the more specific reading.
   // The step must LEAD with a messaging verb. Matching the word "whatsapp"
   // anywhere would swallow "search whatsapp web", which is an open, not a send.
-  const looksLikeMessaging = /^(?:text|message|msg|whatsapp|send|write|tell)\b/i.test(
-    step.trim(),
-  );
+  // "tell me the time" is a question, and a bare "whatsapp web" is a place.
+  const isExactTarget = [...KNOWN_APPS, ...KNOWN_SITES].some((entry) => entry.aliases.includes(text));
+  const looksLikeMessaging =
+    /^(?:text|message|msg|whatsapp|send|write|tell)\b(?!\s+me\b)/i.test(step.trim()) && !isExactTarget;
 
   if (looksLikeMessaging && (slots.recipient || slots.message)) {
+    // The NLU takes one word as the name; "text john smith hi" means the
+    // saved contact "john smith" when there is one.
+    if (slots.recipient && slots.message && !slots.phone) {
+      const [next, ...body] = slots.message.split(/\s+/);
+      const joined = `${slots.recipient} ${next}`.toLowerCase();
+      if (Object.keys(memory.contacts ?? {}).some((name) => name.toLowerCase() === joined)) {
+        slots = { ...slots, recipient: `${slots.recipient} ${next}`, message: body.join(' ') || undefined };
+      }
+    }
     // Missing half of a message is a question, not a failure - the executor
     // pauses the plan and asks, then resumes with the answer filled in.
     const missing: Array<'recipient' | 'message'> = [];
@@ -164,34 +174,81 @@ function planStep(step: string, slots: Slots, memory: JarvisMemory): Task[] {
     return [task('open_path', 'Go up one folder', { pathQuery: '..', target: '..' })];
   }
 
+  // --- closing an app ------------------------------------------------------
+  // Before the app lookup, which would otherwise read "close chrome" as
+  // "open chrome".
+  const closeMatch = text.match(/^(?:close|quit|exit|kill)\s+(?:the\s+)?(.+?)(?:\s+app)?$/);
+  if (closeMatch) {
+    const name = closeMatch[1];
+    const previous = /^(?:it|that|this)$/.test(name) ? memory.last_app : '';
+    const app = findApp(previous || name);
+    const target = app?.key ?? (previous || name);
+    return [task('close_app', `Close ${app?.label ?? capitalize(target)}`, { target })];
+  }
+
+  // "restart chrome" restarts Chrome, not the PC.
+  const restartApp = text.match(/^(?:restart|reboot|relaunch)\s+(?:the\s+)?(.+?)(?:\s+app)?$/);
+  const restartTarget = restartApp && !/^(?:pc|computer|laptop|system|machine|windows)$/.test(restartApp[1])
+    ? findApp(restartApp[1])
+    : null;
+  if (restartTarget) {
+    return [
+      task('close_app', `Close ${restartTarget.label}`, { target: restartTarget.key }),
+      task('wait', 'Wait 2s', { seconds: 2 }),
+      task('open_app', `Open ${restartTarget.label}`, { target: restartTarget.key }),
+    ];
+  }
+
+  // A step that leads with "search" is a search, whatever words it contains:
+  // "search how to lock files" must never lock the screen.
+  const searchLed = /^(?:search|google|look up|find)\b/.test(text) && !!slots.query;
+
   // --- system actions ------------------------------------------------------
   // Anchored so "blockchain" no longer triggers a screen lock.
-  if (/\b(?:shutdown|shut down|power off)\b/.test(text)) {
+  if (searchLed) {
+    // fall through to the search below
+  } else if (/\b(?:shutdown|shut down|power off)\b/.test(text)) {
     return [task('system', 'Shut down the PC', { action: 'shutdown', dangerous: true })];
   }
-  if (/\b(?:restart|reboot)\b/.test(text)) {
+  if (searchLed) {
+    // fall through to the search below
+  } else if (/\b(?:restart|reboot)\b/.test(text)) {
     return [task('system', 'Restart the PC', { action: 'restart', dangerous: true })];
-  }
-  if (/\block\b(?:\s+(?:the\s+)?(?:pc|screen|computer|workstation))?/.test(text)) {
+  } else if (/\block\b(?:\s+(?:the\s+)?(?:pc|screen|computer|workstation))?/.test(text)) {
     return [task('system', 'Lock the screen', { action: 'lock', dangerous: true })];
-  }
-  if (/\b(?:sleep|suspend)\b/.test(text)) {
+  } else if (/\b(?:sleep|suspend)\b/.test(text)) {
     return [task('system', 'Sleep the PC', { action: 'sleep', dangerous: true })];
   }
 
   // --- time / date ---------------------------------------------------------
-  if (/\b(?:what(?:'s| is)? the )?time\b/.test(text) && !/\bsearch\b/.test(text)) {
+  if (!searchLed && /\b(?:what(?:'s| is)? the )?time\b/.test(text)) {
+    // The clock here only knows this machine's zone; "time in tokyo" is a search.
+    const place = text.match(/\btime\b.*?\bin\s+([a-z][a-z .'-]+)$/);
+    if (place) return [task('search', `Search for "time in ${place[1]}"`, { query: `time in ${place[1]}` })];
     return [task('query_time', 'Check the time')];
   }
-  if (/\b(?:what(?:'s| is)? (?:the |today'?s? )?date|what day (?:is|it))\b/.test(text)) {
+  if (!searchLed && /\b(?:what(?:'s| is)? (?:the |today'?s? )?date|what day (?:is|it)|what(?:'s| is) today)\b/.test(text)) {
     return [task('query_date', 'Check the date')];
   }
 
   // --- web search ----------------------------------------------------------
   // Must come before the site lookup: "search" and "google" are also aliases
   // of the Google *site*, and the search reading wins when a query follows.
+  // "play despacito on youtube" is a YouTube search; there is no player here.
+  const playOn = text.match(/^play\s+(.+?)\s+on\s+youtube$/);
+  if (playOn) return [siteSearch('youtube', playOn[1])];
+
   if (slots.query) {
     const query = normalize(slots.query);
+    // "search lofi on youtube" / "search github for react": that site's own search.
+    const onSite = query.match(/^(.+?)\s+(?:on|in)\s+(.+)$/);
+    const forSite = query.match(/^(.+?)\s+for\s+(.+)$/);
+    const named = (alias: string) => {
+      const site = findSite(alias);
+      return site && SITE_SEARCH[site.key] && site.aliases.some((a) => normalize(a) === alias) ? site : null;
+    };
+    if (onSite && named(onSite[2])) return [siteSearch(named(onSite[2])!.key, onSite[1])];
+    if (forSite && named(forSite[1])) return [siteSearch(named(forSite[1])!.key, forSite[2])];
     // "search whatsapp web" means open the site, not web-search that phrase.
     // Only when the query IS the site name - "search github for foo" still searches.
     const site = findSite(query);
@@ -249,7 +306,7 @@ function planStep(step: string, slots: Slots, memory: JarvisMemory): Task[] {
   }
 
   // --- generic "open X" ----------------------------------------------------
-  const target = slots.target;
+  const target = slots.target?.replace(/^(?:the|my)\s+/i, '');
   if (target && /^(?:open|launch|start|run|go to|visit)\b/i.test(step.trim())) {
     if (looksLikeDomain(target)) {
       return [task('open_site', `Open ${target}`, { url: toUrl(target), target })];
@@ -258,6 +315,16 @@ function planStep(step: string, slots: Slots, memory: JarvisMemory): Task[] {
   }
 
   return [task('unknown', step, { target: step })];
+}
+
+/** A search on one site's own results page, as an ordinary search task. */
+function siteSearch(siteKey: string, query: string): Task {
+  const site = KNOWN_SITES.find((s) => s.key === siteKey)!;
+  return task('search', `Search ${site.label} for "${query}"`, {
+    query,
+    target: site.key,
+    url: `${SITE_SEARCH[site.key]}${encodeURIComponent(query)}`,
+  });
 }
 
 function buildMessageLabel(slots: Slots): string {
@@ -313,7 +380,24 @@ export function planUtterance(rawInput: string, memory: JarvisMemory): Plan {
       phone: slots.phone ?? carried.phone,
     };
 
-    tasks.push(...planStep(fragment, merged, memory));
+    const planned = planStep(fragment, merged, memory);
+
+    // "open youtube and search lofi": the search belongs to the site just
+    // opened, so the two steps become that site's results page.
+    const previous = tasks[tasks.length - 1];
+    const [first] = planned;
+    if (
+      planned.length === 1 &&
+      first.kind === 'search' &&
+      !first.url &&
+      previous?.kind === 'open_site' &&
+      previous.target &&
+      SITE_SEARCH[previous.target]
+    ) {
+      tasks[tasks.length - 1] = siteSearch(previous.target, first.query ?? '');
+      continue;
+    }
+    tasks.push(...planned);
   }
 
   if (tasks.length === 0) {

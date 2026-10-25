@@ -304,6 +304,10 @@ const APP_TARGETS = {
     itunes: { shellTarget: 'itunes' },
     xboxapp: { shellTarget: 'xbox:' },
     camera: { shellTarget: 'microsoft.windows.camera:' },
+    recyclebin: { file: 'explorer.exe', args: ['shell:RecycleBinFolder'] },
+    clock: { shellTarget: 'ms-clock:' },
+    snippingtool: { shellTarget: 'ms-screenclip:' },
+    store: { shellTarget: 'ms-windows-store:' },
   },
   darwin: {
     notepad: { file: 'open', args: ['-a', 'TextEdit'] },
@@ -340,9 +344,119 @@ function genericTarget(name) {
   return { shellTarget: name };
 }
 
+// ---------------------------------------------------------------------------
+// Knowing an app is there before starting it
+// ---------------------------------------------------------------------------
+// `cmd /c start` reports nothing back: a name Windows cannot resolve still
+// "starts" (cmd ran), so the user got an error box while Jarvis said
+// "Opened". A target is checked first - a URI scheme in the registry, an exe
+// on PATH or in App Paths - and anything else is looked up in the Start menu,
+// which is where most installed apps, Store apps included, can be found.
+
+function regKeyExists(key) {
+  return new Promise((resolve) => {
+    execFile('reg.exe', ['query', key], { windowsHide: true }, (error) => resolve(!error));
+  });
+}
+
+function onPath(name) {
+  const exts = /\.[a-z0-9]+$/i.test(name) ? [''] : (process.env.PATHEXT || '.EXE;.CMD;.BAT;.COM').split(';');
+  for (const dir of (process.env.PATH || '').split(path.delimiter)) {
+    if (!dir) continue;
+    for (const ext of exts) {
+      try {
+        if (fs.existsSync(path.join(dir, name + ext))) return true;
+      } catch {
+        /* unreadable PATH entry - keep looking */
+      }
+    }
+  }
+  return false;
+}
+
+/** Whether `start <target>` would find something, without starting it. */
+async function canStart(target) {
+  if (process.platform !== 'win32') return true;
+  try {
+    if (path.isAbsolute(target) && fs.existsSync(target)) return true;
+  } catch {
+    /* fall through */
+  }
+  // "spotify:" is a scheme; "C:\..." is a drive, hence two letters at least.
+  const scheme = target.match(/^([a-z][a-z0-9+.-]+):(?![\\/])/i);
+  if (scheme) {
+    if (scheme[1].toLowerCase() === 'shell') return true;
+    return regKeyExists(`HKCR\\${scheme[1]}`);
+  }
+  if (/[\\/]/.test(target)) return false;
+  if (onPath(target)) return true;
+  const exe = /\.exe$/i.test(target) ? target : `${target}.exe`;
+  const appPaths = 'SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\';
+  return (await regKeyExists(`HKLM\\${appPaths}${exe}`)) || regKeyExists(`HKCU\\${appPaths}${exe}`);
+}
+
+/** Start-menu apps ({ name, id }), read once and kept for ten minutes. */
+let startApps = null;
+function listStartApps() {
+  if (startApps && Date.now() - startApps.at < 10 * 60 * 1000) return Promise.resolve(startApps.list);
+  return new Promise((resolve) => {
+    execFile(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', 'Get-StartApps | Select-Object Name, AppID | ConvertTo-Json -Compress'],
+      { windowsHide: true, timeout: 15000, maxBuffer: 4 * 1024 * 1024 },
+      (error, stdout) => {
+        let list = [];
+        try {
+          const parsed = JSON.parse(stdout);
+          list = (Array.isArray(parsed) ? parsed : [parsed])
+            .map((app) => ({ name: String(app.Name || ''), id: String(app.AppID || '') }))
+            .filter((app) => app.name && app.id && !/\b(?:uninstall|readme|help|website)\b/i.test(app.name));
+        } catch {
+          /* no Start menu to read - nothing to offer */
+        }
+        if (!error) startApps = { at: Date.now(), list };
+        resolve(list);
+      },
+    );
+  });
+}
+
+const squash = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/** Best Start-menu match for any of the names: exact, then prefix, then all words. */
+async function findStartApp(names) {
+  const wanted = names.map(squash).filter((w) => w.length >= 2);
+  if (!wanted.length) return null;
+  const apps = await listStartApps();
+  const shortest = (hits) => hits.sort((a, b) => a.name.length - b.name.length)[0] || null;
+
+  for (const w of wanted) {
+    const hit = apps.find((app) => squash(app.name) === w);
+    if (hit) return hit;
+  }
+  for (const w of wanted) {
+    if (w.length < 4) continue;
+    const hit = shortest(apps.filter((app) => squash(app.name).startsWith(w)));
+    if (hit) return hit;
+  }
+  for (const name of names) {
+    const words = String(name || '').toLowerCase().split(/\s+/).filter(Boolean);
+    if (!words.length) continue;
+    const hit = shortest(
+      apps.filter((app) => {
+        const own = app.name.toLowerCase().split(/[^a-z0-9]+/);
+        return words.every((w) => own.includes(w));
+      }),
+    );
+    if (hit) return hit;
+  }
+  return null;
+}
+
 async function openApp(appKey, options = {}) {
   const key = String(appKey || '').trim();
   if (!key) return { success: false, message: 'No application given.' };
+  const name = options.label || key;
 
   // Browsers take the profile/url path.
   if (['chrome', 'edge', 'firefox'].includes(key.toLowerCase())) {
@@ -352,15 +466,98 @@ async function openApp(appKey, options = {}) {
   const table = APP_TARGETS[process.platform] || APP_TARGETS.linux;
   const target = table[key.toLowerCase()] || genericTarget(key);
 
+  if (process.platform === 'win32' && target.shellTarget && !(await canStart(target.shellTarget))) {
+    const app = await findStartApp([options.label, key]);
+    if (app) {
+      const started = await launch('explorer.exe', [`shell:AppsFolder\\${app.id}`]);
+      if (started.success) return { success: true, message: `Opened ${app.name}.` };
+    }
+    return { success: false, message: `I couldn't find ${name} on this PC — it doesn't look installed.` };
+  }
+
   const result = target.shellTarget
     ? await startViaShell(target.shellTarget, target.args || [])
     : await launch(target.file, target.args || []);
 
-  if (result.success) return { success: true, message: `Opened ${key}.` };
+  if (result.success) return { success: true, message: `Opened ${name}.` };
   return {
     success: false,
-    message: `I couldn't find "${key}" on this system. What's the exact command or file path to launch it?`,
+    message: `I couldn't find "${name}" on this system. What's the exact command or file path to launch it?`,
   };
+}
+
+/** Process images per app key, for closing. Unlisted names try "<name>.exe". */
+const APP_PROCESSES = {
+  chrome: ['chrome.exe'],
+  edge: ['msedge.exe'],
+  firefox: ['firefox.exe'],
+  vscode: ['Code.exe'],
+  notepad: ['notepad.exe'],
+  calculator: ['CalculatorApp.exe', 'calc.exe'],
+  taskmanager: ['Taskmgr.exe'],
+  paint: ['mspaint.exe'],
+  terminal: ['WindowsTerminal.exe'],
+  powershell: ['powershell.exe', 'pwsh.exe'],
+  cmd: ['cmd.exe'],
+  settingsapp: ['SystemSettings.exe'],
+  word: ['WINWORD.EXE'],
+  excel: ['EXCEL.EXE'],
+  powerpoint: ['POWERPNT.EXE'],
+  outlook: ['OUTLOOK.EXE', 'olk.exe'],
+  onenote: ['ONENOTE.EXE'],
+  spotify: ['Spotify.exe'],
+  discord: ['Discord.exe'],
+  slack: ['slack.exe'],
+  zoom: ['Zoom.exe'],
+  teams: ['ms-teams.exe', 'Teams.exe'],
+  whatsapp: ['WhatsApp.exe', 'WhatsApp.Root.exe'],
+  telegram: ['Telegram.exe'],
+  steam: ['steam.exe'],
+  vlc: ['vlc.exe'],
+  obs: ['obs64.exe'],
+  notion: ['Notion.exe'],
+  figma: ['Figma.exe'],
+  postman: ['Postman.exe'],
+  docker: ['Docker Desktop.exe'],
+  camera: ['WindowsCamera.exe'],
+  clock: ['Time.exe'],
+  photoshop: ['Photoshop.exe'],
+  adobereader: ['AcroRd32.exe', 'Acrobat.exe'],
+};
+
+/** Things that are the desktop itself; "closing" them breaks the session. */
+const NEVER_CLOSE = new Set(['explorer.exe', 'dwm.exe', 'csrss.exe', 'winlogon.exe', 'lsass.exe', 'svchost.exe', 'system']);
+
+/**
+ * Ask an app to close, the way its own close button would.
+ * taskkill without /F posts WM_CLOSE: an app with unsaved work still gets to
+ * ask, and windowless processes - Jarvis's own PowerShell helpers among
+ * them - are left alone.
+ */
+function closeApp(appKey, options = {}) {
+  const key = String(appKey || '').trim().toLowerCase();
+  const name = options.label || appKey;
+  if (!key) return Promise.resolve({ success: false, message: 'No application given.' });
+  if (process.platform !== 'win32') {
+    return Promise.resolve({ success: false, message: 'Closing apps is only supported on Windows for now.' });
+  }
+
+  const images = APP_PROCESSES[key] || [`${key.replace(/\s+/g, '')}.exe`];
+  if (images.some((image) => NEVER_CLOSE.has(image.toLowerCase()))) {
+    return Promise.resolve({ success: false, message: `I won't close ${name} — it's part of Windows itself.` });
+  }
+
+  const args = images.flatMap((image) => ['/IM', image]);
+  return new Promise((resolve) => {
+    execFile('taskkill.exe', args, { windowsHide: true }, (_error, stdout) => {
+      const closed = /SUCCESS/i.test(String(stdout));
+      resolve(
+        closed
+          ? { success: true, message: `Closed ${name}.` }
+          : { success: false, message: `${name} isn't open.` },
+      );
+    });
+  });
 }
 
 function openUrl(url) {
@@ -502,6 +699,9 @@ async function openCustom(target) {
   }
   // A taught command is a path or executable name, launched as one literal
   // token - it is not re-parsed by a shell.
+  if (!(await canStart(trimmed))) {
+    return { success: false, message: `I couldn't find "${trimmed}" on this PC. Teach me the full path instead.` };
+  }
   const result = await startViaShell(trimmed);
   return result.success
     ? { success: true, message: 'Done.' }
@@ -524,6 +724,20 @@ function driveFromPhrase(text) {
   if (!match) return null;
   const letter = (match[1] || match[2]).toUpperCase();
   return `${letter}:\\`;
+}
+
+/**
+ * A folder standing in for a missing drive: on a one-drive laptop "C:\D drive"
+ * is what "the d drive" means. Null when the drive is real or no folder fits.
+ */
+function driveStandIn(drive) {
+  if (process.platform !== 'win32' || fs.existsSync(drive)) return null;
+  const name = `${drive[0]} drive`;
+  for (const root of driveRoots()) {
+    const hit = subdirectories(root).find((dir) => dir.toLowerCase() === name.toLowerCase());
+    if (hit) return path.join(root, hit);
+  }
+  return null;
 }
 
 /** Folders Windows users name out loud but never by path. */
@@ -599,16 +813,21 @@ function resolvePath(query, base) {
 
   // --- already a path ------------------------------------------------------
   if (/^[a-z]:[\\/]/i.test(raw) || /^\\\\/.test(raw) || raw.startsWith('/')) {
-    return fs.existsSync(raw)
-      ? { success: true, path: path.normalize(raw) }
-      : { success: false, message: `There's nothing at ${raw}.` };
+    if (fs.existsSync(raw)) return { success: true, path: path.normalize(raw) };
+    // "D:\projects" said on a machine whose D drive is a folder on C.
+    const standIn = /^[a-z]:/i.test(raw) ? driveStandIn(`${raw[0].toUpperCase()}:\\`) : null;
+    const mapped = standIn && path.join(standIn, raw.slice(3));
+    if (mapped && fs.existsSync(mapped)) return { success: true, path: mapped };
+    return { success: false, message: `There's nothing at ${raw}.` };
   }
 
   // --- a drive -------------------------------------------------------------
   const drive = driveFromPhrase(raw);
   if (drive) {
-    return fs.existsSync(drive)
-      ? { success: true, path: drive }
+    if (fs.existsSync(drive)) return { success: true, path: drive };
+    const standIn = driveStandIn(drive);
+    return standIn
+      ? { success: true, path: standIn }
       : { success: false, message: `There's no ${drive.replace('\\', '')} drive on this machine.` };
   }
 
@@ -716,6 +935,7 @@ function registerIpcHandlers() {
   ipcMain.handle('memory:set', (_event, data) => writeMemory(data));
 
   ipcMain.handle('action:open-app', (_event, appKey, options) => openApp(appKey, options || {}));
+  ipcMain.handle('action:close-app', (_event, appKey, options) => closeApp(appKey, options || {}));
   ipcMain.handle('action:open-url', (_event, url) => openUrl(url));
   ipcMain.handle('action:open-url-profile', (_event, { url, browser, profile }) =>
     openUrlInProfile(url, browser, profile),
@@ -871,6 +1091,16 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+
+  // With throttling off the page never learns it is hidden, so it is told:
+  // the renderer stops drawing while nobody can see it.
+  const sendVisibility = (visible) => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('window:visibility', visible);
+  };
+  mainWindow.on('hide', () => sendVisibility(false));
+  mainWindow.on('minimize', () => sendVisibility(false));
+  mainWindow.on('show', () => sendVisibility(!mainWindow.isMinimized()));
+  mainWindow.on('restore', () => sendVisibility(true));
 
   // Closing hides. The renderer keeps the microphone open behind the tray
   // icon, which is the only way a wake word can work at all.

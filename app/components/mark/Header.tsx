@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { APP_VERSION } from './LeftPanel';
 import { markBridge } from '@/lib/mark/types';
+import { useMarkStore } from '@/lib/mark/store';
+import { CloseIcon, MaximizeIcon, MinimizeIcon, SlidersIcon } from '../Icons';
 
 type WinApi = { minimize?(): void; maximize?(): void; close?(): void };
 const win = (): WinApi | null =>
@@ -12,12 +14,34 @@ const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const p2 = (n: number) => String(n).padStart(2, '0');
 
-/** strftime("%H:%M:%S") and strftime("%a %d %b %Y"), locale-free like Mark's. */
 function clockText(d: Date): [string, string] {
-  return [
-    `${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`,
-    `${DAYS[d.getDay()]} ${p2(d.getDate())} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`,
-  ];
+  return [`${p2(d.getHours())}:${p2(d.getMinutes())}`, `${DAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]}`];
+}
+
+/** One word for what the assistant is doing, and the colour it is shown in. */
+export function useStatus(): { label: string; tone: string } {
+  const state = useMarkStore((s) => s.state);
+  const muted = useMarkStore((s) => s.muted);
+  const connected = useMarkStore((s) => s.connected);
+  const configured = useMarkStore((s) => !!s.config?.configured);
+  const wake = useMarkStore((s) => s.wake);
+  if (!configured) return { label: 'Needs an API key', tone: 'idle' };
+  if (!connected) return { label: 'Connecting', tone: 'idle' };
+  if (muted) return { label: 'Muted', tone: 'muted' };
+  if (state === 'SPEAKING') return { label: 'Speaking', tone: 'speaking' };
+  if (state === 'THINKING') return { label: 'Thinking', tone: 'thinking' };
+  if (state === 'SLEEPING') return { label: wake.enabled ? 'Asleep — say “Hey Jarvis”' : 'Asleep', tone: 'idle' };
+  return { label: 'Listening', tone: 'listening' };
+}
+
+export function StatusPill() {
+  const { label, tone } = useStatus();
+  return (
+    <span className={`mk-pill tone-${tone}`}>
+      <i />
+      {label}
+    </span>
+  );
 }
 
 export default function Header({
@@ -31,58 +55,60 @@ export default function Header({
 }) {
   // Rendered empty on the server pass so the static export never bakes in a
   // build-time clock; the first tick fills it in.
-  const [now, setNow] = useState<[string, string]>(['00:00:00', '']);
-  // Resolved after mount so the pre-rendered HTML and the first client render agree.
+  const [now, setNow] = useState<[string, string]>(['', '']);
   const [inElectron, setInElectron] = useState(false);
   useEffect(() => setInElectron(!!markBridge()), []);
   useEffect(() => {
     const tick = () => setNow(clockText(new Date()));
     tick();
-    const t = setInterval(tick, 1000);
+    const t = setInterval(tick, 5000);
     return () => clearInterval(t);
   }, []);
 
-  const display = assistantName.toUpperCase();
-  const sub = display === 'JARVIS' || display === 'J.A.R.V.I.S' ? 'A Friendly Assistant' : 'Personal AI Assistant';
+  const name = assistantName.length <= 4 && assistantName === assistantName.toUpperCase()
+    ? assistantName
+    : assistantName.charAt(0).toUpperCase() + assistantName.slice(1).toLowerCase();
 
   return (
-    // jarvis-lite's window is frameless and this view hides its TopBar, so
-    // Mark's header doubles as the title bar: drag region + window buttons.
-    <div className="mk-header app-drag">
-      <span className="mk-badge">{APP_VERSION}</span>
-      <button
-        className={`mk-drawer-btn${drawerOpen ? ' on' : ''}`}
-        onClick={onToggleDrawer}
-        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        title="Settings & Controls"
-        aria-pressed={drawerOpen}
-      >
-        ⚙
-      </button>
-
-      <div className="mk-title-col">
-        <span className="mk-title">{display}</span>
-        <span className="mk-subtitle">{sub}</span>
+    // The window is frameless, so this bar doubles as the title bar.
+    <header className="mk-header app-drag">
+      <div className="mk-header-l">
+        <button
+          className={`btn icon sm app-no-drag${drawerOpen ? ' accent' : ''}`}
+          onClick={onToggleDrawer}
+          title="Settings & controls"
+          aria-pressed={drawerOpen}
+          aria-label="Settings & controls"
+        >
+          <SlidersIcon width={16} height={16} />
+        </button>
+        <span className="chip mk-ver">{APP_VERSION}</span>
       </div>
 
-      <div className="mk-clock-col">
-        <span className="mk-clock">{now[0]}</span>
-        <span className="mk-date">{now[1]}</span>
+      <div className="mk-header-c">
+        <span className="mk-name">{name}</span>
+        <StatusPill />
       </div>
 
-      {inElectron && (
-        <div className="mk-winctl app-no-drag">
-          <button onClick={() => win()?.minimize?.()} title="Minimise">
-            ─
-          </button>
-          <button onClick={() => win()?.maximize?.()} title="Maximise">
-            □
-          </button>
-          <button className="close" onClick={() => win()?.close?.()} title="Close">
-            ✕
-          </button>
+      <div className="mk-header-r">
+        <div className="mk-clock">
+          <span className="tnum">{now[0]}</span>
+          <small>{now[1]}</small>
         </div>
-      )}
-    </div>
+        {inElectron && (
+          <div className="mk-winctl app-no-drag">
+            <button onClick={() => win()?.minimize?.()} title="Minimise" aria-label="Minimise">
+              <MinimizeIcon width={15} height={15} />
+            </button>
+            <button onClick={() => win()?.maximize?.()} title="Maximise" aria-label="Maximise">
+              <MaximizeIcon width={14} height={14} />
+            </button>
+            <button className="close" onClick={() => win()?.close?.()} title="Close" aria-label="Close">
+              <CloseIcon width={15} height={15} />
+            </button>
+          </div>
+        )}
+      </div>
+    </header>
   );
 }

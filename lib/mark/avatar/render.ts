@@ -6,7 +6,7 @@
 
 import { hud, type ScheduledVisemes } from '../hud';
 import { HoloAvatar } from './avatar';
-import { blend, css, type HudPalette, type Rgb } from './palette';
+import { blend, css, cssA, type HudPalette, type Rgb } from './palette';
 
 /** Mark's QTimer period. Every per-tick constant below assumes it. */
 export const TICK_MS = 16;
@@ -20,6 +20,12 @@ export interface HudInputs {
   hudStyle: 'face' | 'core';
   /** Already upper-cased, as Mark displays it. */
   name: string;
+  /**
+   * Glass HUD: paint on a transparent canvas so the ambient field shows
+   * through, without Mark's grid or status text (the header carries the
+   * state). The face and core themselves are drawn exactly as before.
+   */
+  glass?: boolean;
 }
 
 const clamp = (x: number, lo: number, hi: number) => (x < lo ? lo : x > hi ? hi : x);
@@ -266,7 +272,9 @@ export class HudRenderer {
     const t = this.corePhase;
     const live = (speaking || amp > 0.04) && !muted;
     // Pre-mixed onto the background, like Mark (its opaque raster path).
-    const mix = (col: Rgb, a: number) => css(blend(bg, col, 255 * clamp(a, 0, 1)));
+    const mix = inp.glass
+      ? (col: Rgb, a: number) => cssA(col, 255 * clamp(a, 0, 1))
+      : (col: Rgb, a: number) => css(blend(bg, col, 255 * clamp(a, 0, 1)));
     const line = (x0: number, y0: number, x1: number, y1: number) => {
       p.moveTo(x0, y0);
       p.lineTo(x1, y1);
@@ -434,8 +442,19 @@ export class HudRenderer {
   /** Paint one frame. `W`/`H` in CSS pixels; the context is already scaled by dpr. */
   paint(p: CanvasRenderingContext2D, W: number, H: number, dpr: number, pal: HudPalette, inp: HudInputs): void {
     const { speaking, muted, state } = HudRenderer.flags(inp);
-    p.fillStyle = css(pal.BG);
-    p.fillRect(0, 0, W, H);
+    const glass = !!inp.glass;
+    if (glass) {
+      // Clear the whole pixel buffer, not W×H CSS pixels: at a fractional
+      // display scale (125%) the last device column is only half covered,
+      // never fully wiped, and frames pile up there as a hairline.
+      p.save();
+      p.setTransform(1, 0, 0, 1, 0, 0);
+      p.clearRect(0, 0, p.canvas.width, p.canvas.height);
+      p.restore();
+    } else {
+      p.fillStyle = css(pal.BG);
+      p.fillRect(0, 0, W, H);
+    }
 
     const cx = W / 2;
     const cy = H / 2;
@@ -443,10 +462,12 @@ export class HudRenderer {
 
     // Grid dots, blitted from a cached layer; rebuilt only when the size or the
     // theme's ghost colour changes, so live re-theming still works.
-    p.save();
-    p.setTransform(1, 0, 0, 1, 0, 0);
-    p.drawImage(this.grid(W, H, dpr, pal.PRI_GHO), 0, 0);
-    p.restore();
+    if (!glass) {
+      p.save();
+      p.setTransform(1, 0, 0, 1, 0, 0);
+      p.drawImage(this.grid(W, H, dpr, pal.PRI_GHO), 0, 0);
+      p.restore();
+    }
 
     // ── holographic head ──────────────────────────────────────────────────
     // Sized to the band between the top of the canvas and the status line,
@@ -501,11 +522,13 @@ export class HudRenderer {
       txt = `${this.blinkOn ? '●' : '○'}  ${state}`;
       col = pal.PRI;
     }
-    p.fillStyle = css(col);
-    p.font = `bold ${(11 * PT).toFixed(2)}px "Courier New", monospace`;
-    p.textAlign = 'center';
-    p.textBaseline = 'middle';
-    p.fillText(txt, W / 2, sy + 13);
+    if (!glass) {
+      p.fillStyle = css(col);
+      p.font = `bold ${(11 * PT).toFixed(2)}px "Courier New", monospace`;
+      p.textAlign = 'center';
+      p.textBaseline = 'middle';
+      p.fillText(txt, W / 2, sy + 13);
+    }
 
     // ── waveform ──────────────────────────────────────────────────────────
     // Reacts to the real audio level (mic while listening, the assistant's own
@@ -530,10 +553,26 @@ export class HudRenderer {
         if (amp > 0.05) cl = hgt > 12 ? pal.PRI : pal.PRI_DIM;
         else cl = pal.BORDER_B;
       }
-      p.fillStyle = css(cl);
-      p.fillRect(wx0 + i * bw, wy + 20 - hgt, bw - 1, hgt);
+      if (glass) {
+        // Soft pills centred on the line, in the accent at a level-led alpha.
+        const a = muted ? 0.5 : amp > 0.05 ? (hgt > 12 ? 0.95 : 0.65) : 0.35;
+        p.fillStyle = cssA(muted ? pal.MUTED_C : pal.PRI, 255 * a);
+        const x = wx0 + i * bw + 1.5;
+        const y = wy + 8 - hgt / 2;
+        roundRect(p, x, y, bw - 3, hgt, Math.min(2.5, (bw - 3) / 2));
+      } else {
+        p.fillStyle = css(cl);
+        p.fillRect(wx0 + i * bw, wy + 20 - hgt, bw - 1, hgt);
+      }
     }
   }
+}
+
+function roundRect(p: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
+  p.beginPath();
+  if (typeof p.roundRect === 'function') p.roundRect(x, y, w, h, r);
+  else p.rect(x, y, w, h);
+  p.fill();
 }
 
 /** Qt's absolute letter spacing; Chromium has had ctx.letterSpacing since 99. */
